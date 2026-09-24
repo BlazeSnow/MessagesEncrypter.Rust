@@ -1,6 +1,6 @@
 [package]
 name = "messagesencrypter"
-version = "0.1.0"
+version = "2026.9.24"
 description = "MessagesEncrypter"
 authors = ["BlazeSnow"]
 edition = "2021"
@@ -16,6 +16,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+[features]
+# cargo build --release --features custom-protocol 时内嵌前端资产（msix 打包路径）
+custom-protocol = ["tauri/custom-protocol"]
 
 [dependencies]
 tauri = { version = "2", features = [] }

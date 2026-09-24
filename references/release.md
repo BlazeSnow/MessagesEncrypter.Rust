@@ -30,12 +30,16 @@
 
 原版打包要点：自包含 + 裁剪；最低系统 Windows 10 17763；`runFullTrust` 能力。
 
-## 4. Tauri 2 打包注意（待落地验证）
+## 4. Tauri 2 打包（已落地：仅 msixbundle）
 
-- Tauri 默认产物为 MSI/NSIS 安装包；**上架 Microsoft Store 需要 MSIX**。可选路径：Tauri 的 appx 打包目标（需 Windows SDK），或用 MakeAppx 将 Tauri 产物封装为 MSIX 并写入上述 Identity 与版本号。实际流程落地后在 `DEVELOPMENT.md` 回填。
-- WebView2 依赖的分发方式（离线安装器 / 系统内置）在打包验证时确定。
-- 版本号 `YYYY.M.D.0` 需同时写入 tauri.conf 与 MSIX 清单，保持一致。
-- 官网下载区与 FAQ 第 12 条须与最终分发方式保持同步。
+分发目标只有微软商店，产物为 `.msixbundle`，不做其他打包格式。实现（详见 `scripts/make-msix.ps1` 与 `.github/workflows/release.yml`）：
+
+- Tauri 只负责出 exe：`cargo build --release --features custom-protocol`（前端资产经 `custom-protocol` feature 编译期内嵌；`tauri.conf.json` 的 `bundle.targets` 置空，不经 tauri bundler）。
+- `scripts/make-msix.ps1`：用 Windows SDK 的 makeappx/makepri 把 exe + AppxManifest（模板生成，写上述 Identity 与四段版本号）+ 图标资源打包为 `.msix`，再合并为 `.msixbundle`；`/bv` 显式指定 bundle 版本。
+- 图标资产在 `msix/assets/`，沿用原版应用的全套变体（scale / targetsize / altform-unplated），与原版商店条目视觉一致。
+- 版本号：`package.json`（三段 `YYYY.M.D`）为唯一来源，`version.ps1` 同步到 Cargo.toml / tauri.conf.json / Cargo.lock；`tag.ps1` 补第四段后打 `v<版本>` 标签。
+- 发布：推送 `v*` 标签触发 GitHub Actions（windows-latest，x64 + arm64 双架构），产出 msixbundle 并创建 GitHub Release；商店上传使用该 bundle。
+- WebView2 依赖商店打包默认随系统分发；最低系统 Windows 10 17763 与原版一致。
 
 ## 5. 文档站
 

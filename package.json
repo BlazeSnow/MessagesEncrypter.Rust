@@ -1,14 +1,16 @@
 {
   "name": "messagesencrypter",
   "private": true,
-  "version": "0.1.0",
+  "version": "2026.9.24",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tauri build --no-bundle",
     "preview": "vite preview",
     "check:locales": "node tools/check-locales.mjs",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:web": "tsc && vite build",
+    "msix": "powershell -ExecutionPolicy Bypass -File scripts/make-msix.ps1"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

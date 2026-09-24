@@ -40,7 +40,7 @@ $targets = @(
     },
     @{
         Path     = Join-Path $RepoRoot "src-tauri\Cargo.lock"
-        Pattern  = '(?s)(name = "ipabuyer"\r?\nversion = ")[^"]*(")'
+        Pattern  = '(?s)(name = "messagesencrypter"\r?\nversion = ")[^"]*(")'
         Template = '${1}${version}${2}'
         Label    = "src-tauri/Cargo.lock"
     }

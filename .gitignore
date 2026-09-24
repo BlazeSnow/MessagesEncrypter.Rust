@@ -9,6 +9,9 @@ coverage/
 src-tauri/target/
 src-tauri/gen/schemas/
 
+# MSIX 打包中间产物与输出
+msix/out/
+
 # 日志
 logs/
 *.log

@@ -1,0 +1,168 @@
+﻿# 将 Tauri 构建产物打包为 .msixbundle（用于微软商店上传与 GitHub Release）
+# 用法:
+#   scripts/make-msix.ps1                    # 打包 x64（宿主默认目标）并合并 bundle
+#   scripts/make-msix.ps1 -TargetArch x64,arm64 `
+#       -RustTarget 'x86_64-pc-windows-msvc','aarch64-pc-windows-msvc'
+#   scripts/make-msix.ps1 -TargetArch arm64 `
+#       -RustTarget aarch64-pc-windows-msvc -SkipBundle
+# 说明:
+#   - RustTarget 与 TargetArch 一一对应；留空的项表示宿主默认目标（target/ 根目录）
+#   - -SkipBundle 仅生成各架构 .msix，供双架构流程最后统一合并
+param(
+    # 商店要求包版本必须高于已发布版本；源工程采用 年.月.日 CalVer
+    [string]$Version = "2026.9.24.0",
+    [string]$Configuration = "release",
+    # 目标架构，逗号分隔（x64 / x64,arm64）
+    [string]$TargetArch = "x64",
+    # 与 TargetArch 一一对应的 Rust target triple，逗号分隔；空段 = 宿主默认目标
+    [string]$RustTarget = "",
+    # 仅生成各架构 .msix，跳过 .msixbundle 合并
+    [switch]$SkipBundle
+)
+
+$ErrorActionPreference = 'Stop'
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$MsixDir  = Join-Path $RepoRoot "msix"
+$OutDir   = Join-Path $MsixDir "out"
+$AssetsDir = Join-Path $MsixDir "assets"
+
+$ValidArms = @('x64', 'arm64')
+$ArchList = @($TargetArch -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+foreach ($a in $ArchList) {
+    if ($ValidArms -notcontains $a) { Write-Error "无效的目标架构: $a（仅支持 x64 / arm64）" }
+}
+$TripleList = @($RustTarget -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$RequiredAssets = @(
+    "StoreLogo.png", "Square150x150Logo.png", "Square44x44Logo.png",
+    "Wide310x150Logo.png", "SmallTile.png", "LargeTile.png", "SplashScreen.png"
+)
+
+# ---- 定位 MakeAppx / MakePri（Windows SDK），不假设安装盘符 ----
+$CandidateRoots = @()
+if ($env:WindowsSdkDir) { $CandidateRoots += (Join-Path $env:WindowsSdkDir "bin") }
+$CandidateRoots += (Join-Path $env:ProgramFiles "Windows Kits\10\bin")
+$ProgramFilesX86 = ${env:ProgramFiles(x86)}
+if ($ProgramFilesX86) { $CandidateRoots += (Join-Path $ProgramFilesX86 "Windows Kits\10\bin") }
+# SDK 可安装在任意盘符：扫描所有固定磁盘根目录下的 Windows Kits\10\bin
+$CandidateRoots += [System.IO.DriveInfo]::GetDrives() |
+    Where-Object { $_.DriveType -eq 'Fixed' -and $_.IsReady } |
+    ForEach-Object { Join-Path $_.RootDirectory.FullName "Windows Kits\10\bin" }
+
+$MakeAppx = $null
+foreach ($root in ($CandidateRoots | Select-Object -Unique)) {
+    if (-not (Test-Path $root)) { continue }
+    $versionDir = Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "10.*" } |
+        Sort-Object { try { [version]$_.Name } catch { [version]'0.0' } } -Descending |
+        Select-Object -First 1
+    if ($versionDir) {
+        $p = Join-Path $versionDir.FullName "x64\makeappx.exe"
+        if (Test-Path $p) { $MakeAppx = $p; break }
+    }
+}
+if (-not $MakeAppx) { Write-Error "未找到 makeappx.exe（Windows SDK）" }
+Write-Host "MakeAppx: $MakeAppx"
+# MakePri 与 MakeAppx 同目录：生成 resources.pri，使 MRT 能解析
+# scale/targetsize/altform-unplated 变体（任务栏图标去蓝底依赖 altform-unplated）
+$MakePri = Join-Path (Split-Path -Parent $MakeAppx) "makepri.exe"
+if (-not (Test-Path $MakePri)) { Write-Error "未找到 makepri.exe（应与 makeappx.exe 同目录）" }
+Write-Host "MakePri: $MakePri"
+
+# ---- 清理输出目录 ----
+if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
+# ---- 逐架构打包 .msix ----
+# cargo 实际 target 目录：尊重 CARGO_TARGET_DIR / CARGO_HOME config（全局 target-dir 配置）
+$CargoTarget = (cargo metadata --manifest-path (Join-Path $RepoRoot "src-tauri\Cargo.toml") --no-deps --format-version 1 |
+    ConvertFrom-Json).target_directory
+Write-Host "Cargo target dir: $CargoTarget"
+
+$MsixPaths = @()
+for ($i = 0; $i -lt $ArchList.Count; $i++) {
+    $arch = $ArchList[$i]
+    $rustTarget = if ($i -lt $TripleList.Count) { $TripleList[$i] } else { '' }
+
+    # rustTarget 为空 = 宿主默认目标（target 根目录）；否则 target/<triple>/<Configuration>
+    $targetRoot = if ($rustTarget) {
+        Join-Path $CargoTarget (Join-Path $rustTarget $Configuration)
+    } else {
+        Join-Path $CargoTarget $Configuration
+    }
+    $exePath = Join-Path $targetRoot "MessagesEncrypter.exe"
+    if (-not (Test-Path $exePath)) { Write-Error "找不到 $exePath，请先构建 $arch 架构" }
+
+    # ---- 组装临时目录 ----
+    $stageDir = Join-Path $OutDir "stage-$arch"
+    New-Item -ItemType Directory -Force -Path (Join-Path $stageDir "Assets") | Out-Null
+    Copy-Item $exePath (Join-Path $stageDir "MessagesEncrypter.exe")
+
+    # ---- 由模板生成 AppxManifest（校验版本号格式 x.y.z.w）----
+    if ($Version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+        Write-Error "版本号必须为 x.y.z.w 四段格式: $Version"
+    }
+    $manifest = (Get-Content (Join-Path $MsixDir "AppxManifest.template.xml") -Raw) `
+        -replace '@VERSION@', $Version -replace '@ARCH@', $arch
+    Set-Content -Path (Join-Path $stageDir "AppxManifest.xml") -Value $manifest -Encoding UTF8
+
+    # ---- 复制商店图标资源（含 scale/targetsize/altform-unplated 全部变体）----
+    foreach ($asset in $RequiredAssets) {
+        $src = Join-Path $AssetsDir $asset
+        if (-not (Test-Path $src)) { Write-Error "缺少资源文件: $src" }
+    }
+    Copy-Item (Join-Path $AssetsDir "*.png") (Join-Path $stageDir "Assets")
+
+    # ---- 生成 resources.pri：让清单引用的裸文件名（如 Square44x44Logo.png）
+    #      能按 MRT 规则解析到各变体；无 pri 时变体不生效，任务栏会垫色底 ----
+    $priConfig = Join-Path $OutDir "priconfig.xml"
+    & $MakePri createconfig /cf $priConfig /dq en-us /o
+    if ($LASTEXITCODE -ne 0) { Write-Error "makepri createconfig 失败" }
+    & $MakePri new /pr $stageDir /cf $priConfig /of (Join-Path $stageDir "resources.pri") /in MessagesEncrypter /o
+    if ($LASTEXITCODE -ne 0) { Write-Error "makepri new 失败" }
+
+    # ---- makeappx pack -> .msix（动态枚举 stage 内文件）----
+    $msixName = "MessagesEncrypter_$($Version)_$arch.msix"
+    $msixPath = Join-Path $OutDir $msixName
+    $packMapping = Join-Path $OutDir "pack-mapping-$arch.txt"
+    $lines = @('[Files]')
+    $lines += ('"{0}" "AppxManifest.xml"' -f (Join-Path $stageDir "AppxManifest.xml"))
+    $lines += ('"{0}" "MessagesEncrypter.exe"' -f (Join-Path $stageDir "MessagesEncrypter.exe"))
+    $lines += ('"{0}" "resources.pri"' -f (Join-Path $stageDir "resources.pri"))
+    Get-ChildItem (Join-Path $stageDir "Assets") -File | ForEach-Object {
+        $lines += ('"{0}" "Assets\{1}"' -f $_.FullName, $_.Name)
+    }
+    Set-Content -Path $packMapping -Value $lines -Encoding Ascii
+
+    Write-Host "正在打包 $msixName ..."
+    & $MakeAppx pack /f $packMapping /p $msixPath /o
+    if ($LASTEXITCODE -ne 0) { Write-Error "makeappx pack 失败（$arch）" }
+    $MsixPaths += $msixPath
+}
+
+if ($SkipBundle) {
+    Write-Host ""
+    Write-Host "完成（跳过 bundle）:" -ForegroundColor Green
+    foreach ($p in $MsixPaths) { Write-Host "  $p" }
+    exit 0
+}
+
+# ---- makeappx bundle -> .msixbundle ----
+# 单架构保留架构后缀；多架构合并为单一 .msixbundle
+$suffix = if ($ArchList.Count -gt 1) { "" } else { "_$($ArchList[0])" }
+$bundleName    = "MessagesEncrypter_$($Version)$suffix.msixbundle"
+$bundlePath    = Join-Path $OutDir $bundleName
+$bundleMapping = Join-Path $OutDir "bundle-mapping.txt"
+$lines = @('[Files]')
+foreach ($p in $MsixPaths) {
+    $lines += ('"{0}" "{1}"' -f $p, (Split-Path $p -Leaf))
+}
+Set-Content -Path $bundleMapping -Value $lines -Encoding Ascii
+Write-Host "正在合并 $bundleName ..."
+# /bv 必须显式指定：缺省时 makeappx 会用当前 UTC 时间（年.月日.时分.0）生成 bundle 版本，
+# 导致商店显示的版本号与包内实际版本不一致
+& $MakeAppx bundle /f $bundleMapping /p $bundlePath /bv $Version /o
+if ($LASTEXITCODE -ne 0) { Write-Error "makeappx bundle 失败" }
+
+Write-Host ""
+Write-Host "完成: $bundlePath" -ForegroundColor Green
+Write-Host "Identity: BlazeSnow.MessagesEncrypter, CN=C171AF55-419C-4E73-B34E-CB98C8F1EB78, Version=$Version"

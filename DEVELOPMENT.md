@@ -110,7 +110,7 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 | M3 | 加密/解密页面（剪贴板、复制粘贴） | ✅ 完成 |
 | M4 | 密钥管理体验：重命名/删除/改密/记住密码/重复检测 | ✅ 完成 |
 | M5 | 双语 + 语言切换（即时生效） | ✅ 完成 |
-| M6 | 设置页、单实例、桌面打包 | ✅ 完成（MSIX/Store 打包待验证） |
+| M6 | 设置页、单实例、MSIX/Store 打包 | ✅ 完成（msixbundle 打包已落地） |
 | M7 | 旧数据迁移（密钥库/设置/凭据）与兼容验收 | ✅ 完成（真机旧版数据待实测） |
 
 ## 9. 文档维护
@@ -120,6 +120,17 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 - 文档中禁止出现原项目的本机绝对路径；需要指代时用「原 WinUI 3 版本」或公开 URL。
 
 ## 10. 开发日志
+
+### 2026-09-25（晚）
+
+- **打包发布落地（仅 msixbundle，微软商店）**，方案与既有 Tauri 项目实践一致：
+  - `msix/`：AppxManifest 模板（Identity = BlazeSnow.MessagesEncrypter + 原 Publisher，资源 zh-hans/en-us，runFullTrust）+ 商店图标全套变体（取自原版应用资产，含 scale/targetsize/altform-unplated，裸名默认文件由 scale-100 复制）。
+  - `scripts/make-msix.ps1`：定位 Windows SDK 的 makeappx/makepri（不假设盘符）→ 逐架构 stage（exe + manifest + pri + assets）→ pack 成 .msix → bundle 合并 .msixbundle（显式 /bv 保证商店版本号一致）。
+  - `version.ps1`：package.json 为版本唯一来源，同步 Cargo.toml / tauri.conf.json / Cargo.lock；`tag.ps1` 三段补 `.0` 后打 `v<版本>` 标签；`run.ps1` 支持 dev/release/-Msix。
+  - `.github/workflows/release.yml`：tag `v*` 触发，x64 + arm64 双架构构建（`cargo build --release --features custom-protocol`）→ 合并 msixbundle → GitHub Release。
+  - tauri.conf `bundle.targets = []`（不走 tauri bundler）；Cargo `[features] custom-protocol = ["tauri/custom-protocol"]` 供直接 cargo 构建内嵌前端。
+  - 本地验证：release 构建 + make-msix 产出 `MessagesEncrypter_2026.9.24.0_x64.msixbundle`（manifest schema 校验通过）。
+- **PowerShell 陷阱**：管道输出单元素会退化为标量，`$list = "x64" -split ',' | ...` 后 `$list[0]` 取到的是字符 `"x"`——单架构打包时必须用 `@()` 包裹（参考项目的脚本在双架构下不会暴露此问题，已修复并回写）。
 
 ### 2026-09-25
 
