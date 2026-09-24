@@ -1,51 +1,94 @@
+import {
+  FolderKey,
+  House,
+  Lock,
+  LockOpen,
+  Settings as SettingsIcon,
+  ShieldCheck,
+} from "lucide-react";
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+import { IntegrityDialog } from "@/components/IntegrityDialog";
+import { Toaster } from "@/components/ui/sonner";
+import { DecryptPage } from "@/pages/DecryptPage";
+import { EncryptPage } from "@/pages/EncryptPage";
+import { HomePage } from "@/pages/HomePage";
+import { PrivateKeysPage } from "@/pages/PrivateKeysPage";
+import { RecipientKeysPage } from "@/pages/RecipientKeysPage";
+import { SettingsPage } from "@/pages/SettingsPage";
+import { KeysProvider, useKeys } from "@/state/keys";
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+type PageId = "home" | "encrypt" | "decrypt" | "recipient" | "private" | "settings";
+
+const NAV_ITEMS: { id: PageId; labelKey: string; icon: ReactNode }[] = [
+  { id: "home", labelKey: "HomeNavItem.Content", icon: <House className="size-4" /> },
+  { id: "encrypt", labelKey: "EncryptNavItem.Content", icon: <Lock className="size-4" /> },
+  { id: "decrypt", labelKey: "DecryptNavItem.Content", icon: <LockOpen className="size-4" /> },
+  { id: "recipient", labelKey: "RecipientKeysNavItem.Content", icon: <FolderKey className="size-4" /> },
+  { id: "private", labelKey: "PrivateKeysNavItem.Content", icon: <ShieldCheck className="size-4" /> },
+  { id: "settings", labelKey: "SettingsNavItem.Content", icon: <SettingsIcon className="size-4" /> },
+];
+
+function Shell() {
+  const { t } = useTranslation();
+  const [page, setPage] = useState<PageId>("home");
+  const { storeError, refresh } = useKeys();
+
+  // 完整性失败弹窗（缺失 / 校验失败两种状态）。
+  const integrityState =
+    storeError === "ErrorKeyStoreIntegrityMissing"
+      ? "signatureMissing"
+      : storeError === "ErrorKeyStoreIntegrityInvalid"
+        ? "invalid"
+        : null;
+
+  const content: Record<PageId, ReactNode> = {
+    home: <HomePage />,
+    encrypt: <EncryptPage />,
+    decrypt: <DecryptPage />,
+    recipient: <RecipientKeysPage />,
+    private: <PrivateKeysPage />,
+    settings: <SettingsPage />,
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="flex h-full">
+      <nav className="flex w-56 shrink-0 flex-col gap-1 border-r bg-sidebar p-3 text-sidebar-foreground">
+        <div className="mb-3 px-2 py-1 text-sm font-semibold tracking-tight">
+          MessagesEncrypter
+        </div>
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setPage(item.id)}
+            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+              page === item.id
+                ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+            }`}
+          >
+            {item.icon}
+            {t(item.labelKey)}
+          </button>
+        ))}
+      </nav>
+      <main className="flex-1 overflow-y-auto p-6">{content[page]}</main>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      {integrityState ? (
+        <IntegrityDialog state={integrityState} onResolved={() => void refresh()} />
+      ) : null}
+    </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <KeysProvider>
+      <Shell />
+      <Toaster position="bottom-right" richColors />
+    </KeysProvider>
+  );
+}

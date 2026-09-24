@@ -474,6 +474,20 @@ pub async fn set_setting(state: State<'_, AppState>, key: String, value: String)
     .await
 }
 
+/// 启动时读取语言偏好；不受密钥库完整性状态限制（语言初始化必须先于 UI）。
+#[tauri::command]
+pub async fn get_language_preference(state: State<'_, AppState>) -> AppResult<String> {
+    let db_path = state.db_path();
+    join_blocking(spawn_blocking(move || {
+        Ok(
+            keystore::get_setting(&db_path, keystore::SETTING_DISPLAY_LANGUAGE)
+                .unwrap_or(None)
+                .unwrap_or_else(|| "auto".to_string()),
+        )
+    }))
+    .await
+}
+
 #[tauri::command]
 pub fn get_app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()

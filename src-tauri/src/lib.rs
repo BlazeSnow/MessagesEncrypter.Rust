@@ -23,6 +23,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -61,6 +62,7 @@ pub fn run() {
             commands::set_setting,
             commands::get_app_version,
             commands::get_data_dir,
+            commands::get_language_preference,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

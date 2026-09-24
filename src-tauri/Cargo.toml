@@ -36,6 +36,7 @@ thiserror = "2"
 rand = "0.8"
 pkcs8 = { version = "0.10", features = ["pem", "encryption", "std"] }
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security_Credentials"] }
+tauri-plugin-fs = "2.5.2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
