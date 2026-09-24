@@ -21,6 +21,8 @@ use rsa::RsaPublicKey;
 use crate::error::{internal_error, AppError, AppResult};
 
 pub const MIN_RSA_KEY_SIZE_BITS: usize = 2048;
+/// UI 默认值（前端写死 4096，此常量作为文档与后端兜底）。
+#[allow(dead_code)]
 pub const DEFAULT_RSA_KEY_SIZE_BITS: usize = 4096;
 pub const SUPPORTED_RSA_KEY_SIZES_BITS: [usize; 4] = [2048, 3072, 4096, 8192];
 pub const PRIVATE_KEY_PBKDF2_ITERATIONS: u32 = 600_000;
@@ -42,6 +44,8 @@ pub struct KeyPairMaterial {
     pub public_key_pem: String,
     pub encrypted_private_key_pem: String,
     pub fingerprint: String,
+    /// 生成时写入；导入路径由 PEM/密钥位长另行推断，故允许未读。
+    #[allow(dead_code)]
     pub key_size_bits: usize,
 }
 

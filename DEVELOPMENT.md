@@ -131,7 +131,7 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
   3. Rust 解密 .NET 加密的密文包；4. .NET 解密 Rust 用 .NET 公钥加密的密文包。
   互操作测试为 `#[ignore]` 测试 + .NET harness，工件目录经 `INTEROP_DIR` 环境变量传入，仓库内不出现本机路径。
 - **决策记录**：
-  1. 版本号改 semver 三段 `YYYY.M.D`（Tauri 要求 semver）；MSIX 四段制在打包清单层映射。
+  1. 版本号改 semver 三段 `YYYY.M.D`（Tauri 要求 semver）；MSIX 四段制在打包清单层映射。MSI 打包器限制主版本 ≤255 与日期制冲突，桌面分发改用 NSIS 目标；MSIX/Store 打包另行落地（MSIX 主版本允许 65535）。
   2. 数据目录用 Tauri `app_data_dir`（`com.blazesnow.messagesencrypter`），与旧版打包应用 LocalState 不同目录；首启动由 `migration::migrate_legacy_store` 按 PFN（发布者哈希算法已用微软已知值验证）从旧目录复制 keys.db/签名/keys.json。凭据管理器条目同名通用，无需迁移。
   3. 设置迁入 SQLite `settings` 表（键名沿用原版），放弃系统 KV 存储；`get_language_preference` 不受完整性门控，保证语言最先初始化。
   4. 语言切换改为**即时生效**（i18next 动态切换），替代原版「重启生效」；资源键、占位符风格与原版对齐。
