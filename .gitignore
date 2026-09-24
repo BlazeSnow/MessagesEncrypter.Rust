@@ -23,8 +23,7 @@ pnpm-debug.log*
 !.env.example
 
 # 编辑器与系统文件
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 .idea/
 .DS_Store
 Thumbs.db
