@@ -1,0 +1,127 @@
+# DEVELOPMENT
+
+MessagesEncrypter（Tauri 2 重构版）的开发指南与开发日志。
+
+- 根目录 `AGENTS.md` 是最高优先级约束，禁止修改；本文件与其冲突时以 AGENTS.md 为准。
+- **约定：每完成一项功能，必须更新本文件「§10 开发日志」（新条目置于最上方）。**
+
+## 1. 项目定位
+
+- 本仓库是 MessagesEncrypter 的 **Tauri 2 重构版**（原版为 WinUI 3 应用）。原版的功能、协议、数据格式、交互与发布记录在 [references/](./references/README.md)，是本项目的功能与兼容性基线。
+- 产品定位不变：面向 Windows 桌面端的本地公钥消息加密工具——用接收方公钥加密消息、用自己的私钥解密密文包。不是即时通讯、不兼容 PGP、无服务器。
+- 硬性要求：
+  1. 密文格式 v1 与原版**逐字节兼容**（[references/protocol-v1.md](./references/protocol-v1.md)）。
+  2. 原版用户数据可迁移：旧密钥库、导出的 `.pub` / `.pem`、记住的密码（[references/storage.md](./references/storage.md)）。
+
+## 2. 技术栈
+
+| 层 | 选型 | 备注 |
+| --- | --- | --- |
+| 应用框架 | Tauri 2 | 仅支持 Windows |
+| 后端 | Rust | 加密、密钥库、业务逻辑 |
+| 前端 | React + TypeScript + Vite；组件库 shadcn/ui（Tailwind CSS） | 当前选型；调整时回填本表 |
+| 数据库 | SQLite（rusqlite，bundled） | 密钥库 |
+| 多语言 | 后端 fluent-i18n；前端 i18next | 简体中文（默认）+ 英语（回退） |
+| 包管理 | 前端 pnpm | |
+
+## 3. 架构规划
+
+- `src/`（前端）：页面与原版 6 视图对齐（[references/ui-pages.md](./references/ui-pages.md)）；所有用户可见文本走 i18next。
+- `src-tauri/`（后端）模块划分建议：
+  - `protocol_v1` — 密文格式 v1。**铁律：不依赖 Tauri、SQLite、窗口系统**（序列化库除外），保持可独立测试，为未来 v2 预留空间。
+  - `keys` — 密钥生成 / 导入 / 导出 / 指纹 / 改密（加密原语封装）。
+  - `keystore` — SQLite 密钥库、完整性校验、旧数据迁移。
+  - `commands` — Tauri IPC 命令层：参数校验 + 错误码转换，不写业务逻辑。
+- 错误模型：后端统一返回**稳定错误码**（沿用原版 `ErrorXxx` 命名，见 references 各文档）；前端按错误码渲染本地化文案；后端不返回堆栈等内部信息。
+- 单实例：tauri-plugin-single-instance；深浅色主题跟随系统；长耗时操作全部异步执行。
+
+## 4. 开发环境与常用命令
+
+前置要求：
+
+- Windows 10 17763+；Rust stable（msvc toolchain）；Node.js LTS + pnpm；WebView2 Runtime。
+- MSIX/Store 打包另需 Windows SDK（落地时确认）。
+
+命令约定（脚手架搭建后如与实际不符，回填本节）：
+
+```bash
+pnpm install          # 安装前端依赖
+pnpm tauri dev        # 开发运行
+pnpm tauri build      # 构建发布产物
+cargo test            # Rust 单元测试（src-tauri）
+cargo fmt             # 格式化
+cargo clippy          # 静态检查
+```
+
+- 改动完成后必须自行构建、测试通过再交付。
+- 协议 / 密钥 / 存储相关改动必须跑兼容性测试（[references/testing-checklist.md](./references/testing-checklist.md) §2）。
+
+## 5. 终端编码：GBK 与 UTF-8
+
+AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
+
+1. 仓库内源码、资源、文档、配置一律 UTF-8。
+2. Windows 终端默认代码页 936（GBK）：CMD/PowerShell 遇乱码先 `chcp 65001`（PowerShell 另注意 `$OutputEncoding` / `[Console]::OutputEncoding`）；Git Bash 默认 UTF-8。
+3. git 输出中文路径乱码：`git config core.quotepath false`。
+4. 避免把中文作为命令行参数直接传给外部进程（跨进程编码不确定）；需要时用 UTF-8 临时文件或环境变量，并显式按 UTF-8 读回。
+5. 终端里显示乱码 ≠ 数据损坏：先排查显示层编码，再判断数据层。
+6. 涉及剪贴板、文件名、外部进程（如资源管理器定位文件）的功能，测试时必须覆盖中文内容。
+
+## 6. 多语言约定
+
+1. **用户可见文本零硬编码**。范围：页面标题、导航、按钮、菜单、标签、占位符、工具提示、对话框标题/正文/按钮、错误/状态/进度/空状态文案、设置项名称与说明、枚举显示名、文件筛选器描述、剪贴板提示、通知文本。前端走 i18next；后端只返回错误码/枚举。
+2. 键命名沿用原版规律（`Status*`、`Error*`、`XxxDialogTitle`、`<元素>.<属性>` 等），详见 [references/i18n.md](./references/i18n.md)。
+3. 新增文案必须同步补全 zh-Hans 与 en 两份资源；格式占位符跨语言一致；纳入 CI 校验。
+4. 错误码即契约：命名稳定后不得改名。
+5. 语言设置三选：`自动 / 简体中文 / English`；`auto` 跟随系统（`zh-Hans*` / `zh-CN*` / `zh-SG*` 判为中文，其余英语）。
+
+## 7. 不变量与红线
+
+### 7.1 加密与协议
+
+1. RSA-OAEP-SHA256 仅用于封装随机会话密钥；**禁止 RSA 直接加密长消息**。
+2. 每次加密生成新会话密钥与新 nonce（CSPRNG）；禁止复用。
+3. AES-256-GCM：32 字节密钥 / 12 字节 nonce / 16 字节 tag / UTF-8 明文 / 无 AAD。
+4. 解密失败不得输出部分明文；认证失败统一报「解密失败」。
+5. 私钥必须密码加密存储（加密 PKCS#8 PEM，PBES2 = PBKDF2-HMAC-SHA256 ×600000 + AES-256-CBC），禁止明文落盘。
+6. 指纹 = SHA256(公钥 SPKI DER) 前 16 字节、32 位大写十六进制；算法不可变。
+7. `ver ≠ 1` 拒绝；未知字段必须忽略。
+8. 异常只暴露稳定错误码，不泄漏堆栈与内部细节。
+
+### 7.2 产品
+
+1. 不暗示即时通讯/实时聊天；消息不经任何第三方。
+2. 不兼容、不命名 PGP/GPG。
+3. 无 PKI/CA；公钥线下交换、指纹核对。
+4. 文件加密与协议 v2 未定稿：不实现、不承诺、不预告。
+
+### 7.3 架构
+
+1. `protocol_v1` 模块不依赖宿主设施（Tauri / SQLite / 窗口系统）。
+2. 小型设置用 KV 存储，不引入 settings.json（沿用原版约定；迁移注意见 [references/storage.md](./references/storage.md) §7）。
+
+## 8. 里程碑
+
+| 阶段 | 内容 | 状态 |
+| --- | --- | --- |
+| M0 | 脚手架：Tauri 2 + React + shadcn/ui + CI | 未开始 |
+| M1 | `protocol_v1` 模块 + 与原版双向互操作测试 | 未开始 |
+| M2 | 密钥生成/导入/导出/指纹 + 密钥库 + 完整性 | 未开始 |
+| M3 | 加密/解密页面（剪贴板、复制粘贴、进度反馈） | 未开始 |
+| M4 | 密钥管理体验：重命名/删除/改密/记住密码/重复检测 | 未开始 |
+| M5 | 双语 + 语言切换 | 未开始 |
+| M6 | 设置页、单实例、MSIX/Store 打包 | 未开始 |
+| M7 | 旧数据迁移（密钥库/设置/凭据）与兼容验收 | 未开始 |
+
+## 9. 文档维护
+
+- [references/](./references/README.md) 记录**原版现状**：兼容性事实不删改；重构版偏离时在对应文档追加「Tauri 2 迁移注意」小节，并在开发日志记录决策。
+- 协议、密钥、存储文档的修改视为兼容性变更，需说明理由与影响。
+- 文档中禁止出现原项目的本机绝对路径；需要指代时用「原 WinUI 3 版本」或公开 URL。
+
+## 10. 开发日志
+
+### 2026-09-24
+
+- 文档：建立 `DEVELOPMENT.md` 与 `references/`（9 篇：索引、协议 v1、密钥管理、存储、页面与交互、产品规格、多语言、测试清单、发布）。内容取自原 WinUI 3 版本源码与官方文档站，不含原项目本地路径。
+- 项目状态：尚未搭建脚手架，下一阶段 M0。
