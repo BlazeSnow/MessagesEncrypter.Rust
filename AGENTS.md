@@ -21,3 +21,5 @@
 ## 发布
 
 1. 软件发布至Microsoft store
+2. Name="BlazeSnow.MessagesEncrypter"
+3. Publisher="CN=C171AF55-419C-4E73-B34E-CB98C8F1EB78"
