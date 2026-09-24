@@ -330,3 +330,53 @@ fn same_plaintext_encrypts_differently() {
     };
     assert_ne!(nonce_of(&first), nonce_of(&second));
 }
+
+// ===== 与原版（.NET 实现）的互操作验证 =====
+// 用法（配合 .NET 控制台 harness，目录经 INTEROP_DIR 环境变量传入，不落仓库路径）：
+//   1. cargo test interop_generate -- --ignored
+//   2. dotnet harness phase1（生成 dotnet 密钥、解密 rust_package、加密 dotnet_package）
+//   3. cargo test interop_verify -- --ignored（解密 dotnet_package、生成 rust_package_for_dotnet）
+//   4. dotnet harness phase2（解密 rust_package_for_dotnet）
+const INTEROP_PLAINTEXT: &str = "互操作验证 Interop 🚀 emoji 中文 ¥8,888.88\n第二行\t制表符 ← ✓";
+const INTEROP_PASSWORD: &str = "interop-密码-Pass🔑";
+
+fn interop_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(
+        std::env::var("INTEROP_DIR").expect("INTEROP_DIR must be set for interop tests"),
+    )
+}
+
+fn interop_write(name: &str, content: &str) {
+    std::fs::write(interop_dir().join(name), content).expect("write interop artifact");
+}
+
+fn interop_read(name: &str) -> String {
+    std::fs::read_to_string(interop_dir().join(name)).expect("read interop artifact")
+}
+
+#[test]
+#[ignore = "interop harness: run with INTEROP_DIR set"]
+fn interop_generate_artifacts() {
+    let material = crate::keys::generate_key_pair(INTEROP_PASSWORD, 2048).expect("keygen");
+    interop_write("rust_pub.pem", &material.public_key_pem);
+    interop_write("rust_priv.pem", &material.encrypted_private_key_pem);
+    let package =
+        encrypt_to_base64_json(&material.public_key_pem, INTEROP_PLAINTEXT).expect("encrypt");
+    interop_write("rust_package.txt", &package);
+}
+
+#[test]
+#[ignore = "interop harness: run with INTEROP_DIR set"]
+fn interop_verify_artifacts() {
+    // 用 Rust 侧解密 .NET 生成的密文包（含 600k 迭代加密私钥的解析）。
+    let dotnet_priv = interop_read("dotnet_priv.pem");
+    let dotnet_package = interop_read("dotnet_package.txt");
+    let plain =
+        decrypt_from_base64_json(&dotnet_priv, INTEROP_PASSWORD, &dotnet_package).expect("decrypt dotnet package");
+    assert_eq!(plain, INTEROP_PLAINTEXT);
+
+    // 用 .NET 公钥加密，供 .NET 侧解密。
+    let dotnet_pub = interop_read("dotnet_pub.pem");
+    let package = encrypt_to_base64_json(&dotnet_pub, INTEROP_PLAINTEXT).expect("encrypt to dotnet");
+    interop_write("rust_package_for_dotnet.txt", &package);
+}
