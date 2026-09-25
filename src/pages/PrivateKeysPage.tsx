@@ -1,4 +1,4 @@
-import { FileUp, FolderOpen, KeyRound, ShieldPlus } from "lucide-react";
+import { FileUp, FolderOpen, KeyRound, Loader2, ShieldPlus } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -75,8 +76,13 @@ export function PrivateKeysPage() {
   const { privateKeys, refresh } = useKeys();
   const [dialog, setDialog] = useState<DialogState>({ kind: "closed" });
   const [busy, setBusy] = useState(false);
+  // 后台密钥生成任务：对话框立即关闭，列表区显示进度，期间可继续其他操作。
+  const [generation, setGeneration] = useState<{ keySize: number } | null>(null);
 
   const startGenerate = () => {
+    if (generation) {
+      return;
+    }
     setDialog({
       kind: "generate",
       alias: t("DefaultPrivateKeyAlias", { 0: privateKeys.length + 1 }),
@@ -109,7 +115,7 @@ export function PrivateKeysPage() {
   };
 
   const submitGenerate = async () => {
-    if (dialog.kind !== "generate") {
+    if (dialog.kind !== "generate" || generation) {
       return;
     }
     if (!dialog.password) {
@@ -120,21 +126,23 @@ export function PrivateKeysPage() {
       showWarningToast("ErrorPasswordConfirmMismatch");
       return;
     }
-    setBusy(true);
+    // 立即关闭对话框并转入后台；大位数密钥生成耗时可达数十秒到数分钟。
+    const { alias, keySize, password, remember } = dialog;
+    setDialog({ kind: "closed" });
+    setGeneration({ keySize });
     try {
       await api.generateKeyPair({
-        alias: dialog.alias,
-        keySizeBits: dialog.keySize,
-        password: dialog.password,
-        rememberPassword: dialog.remember,
+        alias,
+        keySizeBits: keySize,
+        password,
+        rememberPassword: remember,
       });
-      await refresh("private");
       showStatusToast("StatusKeyGenerated");
-      setDialog({ kind: "closed" });
     } catch (error) {
       showErrorToast(error);
     } finally {
-      setBusy(false);
+      setGeneration(null);
+      await refresh("private");
     }
   };
 
@@ -272,7 +280,7 @@ export function PrivateKeysPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <div className="flex flex-wrap gap-2">
-        <Button onClick={startGenerate}>
+        <Button onClick={startGenerate} disabled={generation !== null}>
           <ShieldPlus className="size-4" />
           {t("GeneratePrivateKeyButton.Text")}
         </Button>
@@ -286,8 +294,24 @@ export function PrivateKeysPage() {
         </Button>
       </div>
 
+      {generation ? (
+        <Card size="sm">
+          <CardContent className="flex items-center gap-3 py-5">
+            <Loader2 className="size-5 shrink-0 animate-spin text-primary" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{t("KeyGeneratingTitle")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("KeyGeneratingHint", { 0: `RSA${generation.keySize}` })}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {privateKeys.length === 0 ? (
-        <EmptyList />
+        generation ? null : (
+          <EmptyList />
+        )
       ) : (
         privateKeys.map((entry) => (
           <KeyCard key={entry.fingerprint} entry={entry} actions={actionsFor(entry)} />

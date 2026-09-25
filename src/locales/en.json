@@ -89,6 +89,8 @@
   "DeleteKeyMenuText": "Delete",
   "KeyListEmptyText": "No keys yet",
   "KeyListEmptyHint": "Use the buttons above to import or generate keys",
+"KeyGeneratingTitle": "Generating key…",
+"KeyGeneratingHint": "{0} key generation may take up to a few minutes. You can keep using the app meanwhile.",
   "DisplayLanguageSettingsCard.Header": "Display language",
   "DisplayLanguageSettingsCard.Description": "Change the interface display language",
   "LanguageAuto": "Auto",

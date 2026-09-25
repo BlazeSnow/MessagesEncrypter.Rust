@@ -121,6 +121,11 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 
 ## 10. 开发日志
 
+### 2026-09-26
+
+- 私钥生成改为后台任务：点确定后对话框立即关闭，密钥列表顶部显示旋转进度卡（含位数与耗时提示），完成后自动刷新列表并提示；生成期间「生成密钥」按钮禁用，其余功能（重命名/删除/导出/加解密）可正常使用，不再前台等待（8192 位可达数分钟）。新增文案键 KeyGeneratingTitle / KeyGeneratingHint。
+- 修复 `pnpm build` 递归：build 脚本改为 `tauri build --no-bundle` 后，tauri.conf 的 beforeBuildCommand 相应改为 `pnpm build:web`。
+
 ### 2026-09-25（夜）
 
 - 图标修正：src-tauri/icons 此前仍是脚手架默认 Tauri 图标。已从原版应用 `messagesencrypter.ico` 提取 256px 帧（ICO 内嵌 PNG 手工解析，GDI+ 不支持 PNG 压缩帧）作为源，`pnpm tauri icon` 重新生成全套图标（含 icon.ico 多尺寸与 Square/Store 变体；android/ios 产物已删除）。

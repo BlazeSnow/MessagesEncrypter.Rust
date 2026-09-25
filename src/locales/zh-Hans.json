@@ -89,6 +89,8 @@
   "DeleteKeyMenuText": "删除",
   "KeyListEmptyText": "暂无密钥",
   "KeyListEmptyHint": "使用上方按钮导入或生成密钥",
+"KeyGeneratingTitle": "正在生成密钥…",
+"KeyGeneratingHint": "{0} 密钥生成可能需要数十秒到数分钟，期间可继续使用其他功能。",
   "DisplayLanguageSettingsCard.Header": "显示语言",
   "DisplayLanguageSettingsCard.Description": "更改界面显示语言",
   "LanguageAuto": "自动",
