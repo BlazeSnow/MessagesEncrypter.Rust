@@ -1,4 +1,4 @@
-import { FileUp, FolderOpen, KeyRound } from "lucide-react";
+import { FileUp, FolderOpen, Import } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -148,7 +148,7 @@ export function RecipientKeysPage() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <div className="flex flex-wrap gap-2">
         <Button onClick={startImport}>
-          <KeyRound className="size-4" />
+          <Import className="size-4" />
           {t("ImportRecipientKeyButton.Text")}
         </Button>
         <Button variant="outline" onClick={() => void openExportFolder()}>

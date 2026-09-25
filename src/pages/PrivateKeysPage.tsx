@@ -1,4 +1,4 @@
-import { FileUp, FolderOpen, KeyRound, Loader2, ShieldPlus } from "lucide-react";
+import { CirclePlus, FileUp, FolderOpen, Import, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -298,11 +298,11 @@ export function PrivateKeysPage() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <div className="flex flex-wrap gap-2">
         <Button onClick={startGenerate} disabled={generation !== null}>
-          <ShieldPlus className="size-4" />
+          <CirclePlus className="size-4" />
           {t("GeneratePrivateKeyButton.Text")}
         </Button>
         <Button variant="outline" onClick={startImport}>
-          <KeyRound className="size-4" />
+          <Import className="size-4" />
           {t("ImportPrivateKeyButton.Text")}
         </Button>
         <Button variant="outline" onClick={() => void openExportFolder()}>

@@ -1,4 +1,4 @@
-import { ClipboardPaste, Eraser, Loader2, LockKeyhole } from "lucide-react";
+import { ClipboardPaste, Eraser, Loader2, LockOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -183,7 +183,7 @@ export function DecryptPage() {
           {busy ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
-            <LockKeyhole className="size-4" />
+            <LockOpen className="size-4" />
           )}
           {t("DecryptButton.Text")}
         </Button>

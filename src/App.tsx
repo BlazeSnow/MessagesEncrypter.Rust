@@ -1,10 +1,10 @@
 import {
-  FolderKey,
   House,
+  KeyRound,
   Lock,
   LockOpen,
   Settings as SettingsIcon,
-  ShieldCheck,
+  ShieldKeyhole,
 } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
@@ -26,8 +26,8 @@ const NAV_ITEMS: { id: PageId; labelKey: string; icon: ReactNode }[] = [
   { id: "home", labelKey: "HomeNavItem.Content", icon: <House className="size-4" /> },
   { id: "encrypt", labelKey: "EncryptNavItem.Content", icon: <Lock className="size-4" /> },
   { id: "decrypt", labelKey: "DecryptNavItem.Content", icon: <LockOpen className="size-4" /> },
-  { id: "recipient", labelKey: "RecipientKeysNavItem.Content", icon: <FolderKey className="size-4" /> },
-  { id: "private", labelKey: "PrivateKeysNavItem.Content", icon: <ShieldCheck className="size-4" /> },
+  { id: "recipient", labelKey: "RecipientKeysNavItem.Content", icon: <KeyRound className="size-4" /> },
+  { id: "private", labelKey: "PrivateKeysNavItem.Content", icon: <ShieldKeyhole className="size-4" /> },
   { id: "settings", labelKey: "SettingsNavItem.Content", icon: <SettingsIcon className="size-4" /> },
 ];
 

@@ -121,6 +121,10 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 
 ## 10. 开发日志
 
+### 2026-09-26（十四）
+
+- UI 图标语义重排（lucide）：接收方公钥 FolderKey→KeyRound（钥匙直表意）、我的私钥 ShieldCheck→ShieldKeyhole（盾中锁孔=受保护的私钥）、解密按钮 LockKeyhole→LockOpen（与导航开锁一致）、生成密钥 ShieldPlus→CirclePlus、导入公钥/私钥 KeyRound→Import（箭头入托盘）。主页/加解密导航、复制/粘贴/清空/目录等本就表意清楚，保留。已截图验证。
+
 ### 2026-09-26（十三）
 
 - 首页序号按官网 quickstart 时间顺序修正：1 生成私钥 → 2 分享公钥 → 3 导入公钥 → 4 加密 → 5 解密（接收方卡片 1/2/5，发送方卡片 3/4；此前把解密编在加密之前，时序错误）。已截图验证。
