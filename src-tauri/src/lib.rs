@@ -61,6 +61,14 @@ pub fn run() {
                 integrity: Arc::new(Mutex::new(integrity_state)),
             });
 
+            // 深色模式：按系统主题预设 WebView 底色，避免启动时白底闪烁
+            //（页面加载后配色由 CSS 的 prefers-color-scheme 接管）。
+            if let Some(window) = app.get_webview_window("main") {
+                let dark = window.theme().is_ok_and(|t| t == tauri::Theme::Dark);
+                let (r, g, b) = if dark { (0x0a, 0x0a, 0x0a) } else { (0xff, 0xff, 0xff) };
+                let _ = window.set_background_color(Some(tauri::window::Color(r, g, b, 0xff)));
+            }
+
             // 几何已由插件恢复（无状态则用默认值）：钳制到工作区后显示，
             // 期间窗口一直不可见，用户看到的即最终位置与尺寸。
             window::fit_main_window(app.handle());

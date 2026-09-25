@@ -121,6 +121,14 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 
 ## 10. 开发日志
 
+### 2026-09-26（十六）
+
+- 深色模式补全（CSS 令牌此前已跟随 prefers-color-scheme 并实测正常，本次补齐三处缺口）：
+  1. CSS 增加 `color-scheme: light/dark`——滚动条与原生控件随系统主题变暗（此前深色下滚动条仍是浅色）；
+  2. 启动时按 `window.theme()` 预设 WebView 底色（深色 #0a0a0a / 浅色 #ffffff），消除深色系统下的启动白闪，页面加载后由 CSS 接管；
+  3. 复核 Toast：sonner 封装在无 next-themes Provider 时默认 theme="system"，样式走 CSS 变量，已自适应，无需修改。
+- 验证：CDP 强制模拟 prefers-color-scheme=dark 截图，整页深色、colorScheme=dark、滚动条深色。
+
 ### 2026-09-26（十五）
 
 - 首页使用说明可点击导航：1 生成私钥→我的私钥、3 导入公钥→接收方公钥、4 加密消息→消息加密、5 解密密文包→消息解密；2 号「分享公钥」为应用外动作保持不可点。可点项带右箭头与悬停反馈，CDP 实测点击 1 号跳转我的私钥页生效。
