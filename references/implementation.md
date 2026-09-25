@@ -62,7 +62,14 @@
 ### 2026-09-24
 1. 文档体系建立（references/ 九篇 + 本文件）。
 
-## 4. 环境备忘（坑）
+## 4. 代码组织
+
+- 命令层 `src-tauri/src/commands/`：mod（共享工具与 DTO）+ integrity / keys / crypto / store 按域拆分；lib.rs 用完整子模块路径引用（tauri 宏在定义模块内解析）。
+- 密钥库 `src-tauri/src/keystore/`：mod（schema/CRUD/settings）+ legacy（id 列重建、keys.json 迁移）。
+- 密钥测试独立文件 `src-tauri/src/keys_tests.rs`（`#[path]` 子模块）。
+- 前端对话框组件 `src/components/keys/`：Generate / ImportPrivateKey / ImportPublicKey / ChangePassword / Rename / Delete（后两个两页共用）+ EmptyList；对话框自含表单状态，条件渲染即重置。
+
+## 5. 环境备忘（坑）
 
 1. **GBK/UTF-8**（AGENTS.md 要求）：仓库内一律 UTF-8；CMD/PowerShell 乱码先 `chcp 65001`；`git config core.quotepath false`。实例：openssl 命令行传中文密码按本地代码页解码导致解密失败，须用 UTF-8 文件（`-passin file:`）；Git Bash 显示 UTF-8 为乱码多为终端显示层问题，数据未必损坏。
 2. **icons/ 变更不触发 build.rs 重跑**（资源嵌入被缓存），需 `touch src-tauri/build.rs` 再构建；用 `ExtractAssociatedIcon` 从 exe 抽图验证。

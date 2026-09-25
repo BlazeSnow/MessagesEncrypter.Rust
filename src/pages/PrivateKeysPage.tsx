@@ -1,75 +1,31 @@
-import { CirclePlus, FileUp, FolderOpen, Import, Loader2 } from "lucide-react";
+import { CirclePlus, FolderOpen, Import, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { KeyCard } from "@/components/KeyCard";
 import type { KeyCardAction } from "@/components/KeyCard";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ChangePasswordDialog } from "@/components/keys/ChangePasswordDialog";
+import { DeleteKeyDialog } from "@/components/keys/DeleteKeyDialog";
+import { EmptyList } from "@/components/keys/EmptyList";
+import { GenerateKeyDialog } from "@/components/keys/GenerateKeyDialog";
+import { ImportPrivateKeyDialog } from "@/components/keys/ImportPrivateKeyDialog";
+import { RenameKeyDialog } from "@/components/keys/RenameKeyDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import type { KeyEntry } from "@/lib/api";
-import { RSA_KEY_SIZES } from "@/lib/api";
-import { exportKey, openExportFolder, pickKeyFile } from "@/lib/keyFiles";
-import { showErrorToast, showStatusToast, showWarningToast } from "@/lib/status";
-import { EmptyList } from "@/pages/RecipientKeysPage";
+import { exportKey, openExportFolder } from "@/lib/keyFiles";
+import { showErrorToast, showStatusToast } from "@/lib/status";
 import { useGeneration } from "@/state/generation";
 import { useKeys } from "@/state/keys";
 
 type DialogState =
   | { kind: "closed" }
-  | {
-      kind: "generate";
-      alias: string;
-      keySize: number;
-      password: string;
-      confirm: string;
-      remember: boolean;
-    }
-  | {
-      kind: "import";
-      alias: string;
-      password: string;
-      content: string;
-      remember: boolean;
-    }
-  | { kind: "rename"; entry: KeyEntry; alias: string }
+  | { kind: "generate" }
+  | { kind: "import" }
+  | { kind: "rename"; entry: KeyEntry }
   | { kind: "delete"; entry: KeyEntry }
-  | {
-      kind: "changePassword";
-      entry: KeyEntry;
-      oldPassword: string;
-      newPassword: string;
-      confirm: string;
-      remember: boolean;
-    };
+  | { kind: "changePassword"; entry: KeyEntry };
 
 /** 我的私钥管理页：生成 / 导入 / 改密 / 重命名 / 删除。 */
 export function PrivateKeysPage() {
@@ -79,84 +35,20 @@ export function PrivateKeysPage() {
   const [dialog, setDialog] = useState<DialogState>({ kind: "closed" });
   const [busy, setBusy] = useState(false);
 
-  const startGenerate = () => {
-    if (generation) {
-      return;
-    }
-    setDialog({
-      kind: "generate",
-      alias: t("DefaultPrivateKeyAlias", { 0: privateKeys.length + 1 }),
-      keySize: 4096,
-      password: "",
-      confirm: "",
-      remember: false,
-    });
-  };
+  const close = () => setDialog({ kind: "closed" });
 
-  const startImport = () => {
-    setDialog({
-      kind: "import",
-      alias: t("DefaultPrivateKeyAlias", { 0: privateKeys.length + 1 }),
-      password: "",
-      content: "",
-      remember: false,
-    });
-  };
-
-  const handleImportFromFile = async () => {
-    const picked = await pickKeyFile("private");
-    if (picked) {
-      setDialog((current) =>
-        current.kind === "import"
-          ? { ...current, alias: picked.fileName, content: picked.content }
-          : current,
-      );
-    }
-  };
-
-  const submitGenerate = async () => {
-    if (dialog.kind !== "generate" || generation) {
-      return;
-    }
-    if (!dialog.password) {
-      showWarningToast("ErrorPasswordRequired");
-      return;
-    }
-    if (dialog.password !== dialog.confirm) {
-      showWarningToast("ErrorPasswordConfirmMismatch");
-      return;
-    }
-    // 立即关闭对话框并转入后台（全局状态，切页不丢进度卡）；
-    // 大位数密钥生成耗时可达数十秒到数分钟。
-    const { alias, keySize, password, remember } = dialog;
-    setDialog({ kind: "closed" });
-    await startGeneration({
-      alias,
-      keySizeBits: keySize,
-      password,
-      rememberPassword: remember,
-    });
-  };
-
-  const submitImport = async () => {
-    if (dialog.kind !== "import") {
-      return;
-    }
-    if (!dialog.password) {
-      showWarningToast("ErrorPasswordRequired");
-      return;
-    }
+  const submitImport = async (args: {
+    alias: string;
+    privateKeyPem: string;
+    password: string;
+    rememberPassword: boolean;
+  }) => {
     setBusy(true);
     try {
-      await api.importPrivateKey({
-        alias: dialog.alias,
-        privateKeyPem: dialog.content,
-        password: dialog.password,
-        rememberPassword: dialog.remember,
-      });
+      await api.importPrivateKey(args);
       await refresh("private");
       showStatusToast("StatusPrivateKeyImported");
-      setDialog({ kind: "closed" });
+      close();
     } catch (error) {
       showErrorToast(error);
     } finally {
@@ -164,29 +56,25 @@ export function PrivateKeysPage() {
     }
   };
 
-  const submitChangePassword = async () => {
+  const submitChangePassword = async (args: {
+    oldPassword: string;
+    newPassword: string;
+    rememberPassword: boolean;
+  }) => {
     if (dialog.kind !== "changePassword") {
-      return;
-    }
-    if (!dialog.newPassword) {
-      showWarningToast("ErrorPasswordRequired");
-      return;
-    }
-    if (dialog.newPassword !== dialog.confirm) {
-      showWarningToast("ErrorPasswordConfirmMismatch");
       return;
     }
     setBusy(true);
     try {
       await api.changePrivateKeyPassword(
         dialog.entry.fingerprint,
-        dialog.oldPassword,
-        dialog.newPassword,
-        dialog.remember,
+        args.oldPassword,
+        args.newPassword,
+        args.rememberPassword,
       );
       await refresh("private");
       showStatusToast("StatusPrivateKeyPasswordChanged");
-      setDialog({ kind: "closed" });
+      close();
     } catch (error) {
       showErrorToast(error);
     } finally {
@@ -194,16 +82,16 @@ export function PrivateKeysPage() {
     }
   };
 
-  const submitRename = async () => {
+  const submitRename = async (alias: string) => {
     if (dialog.kind !== "rename") {
       return;
     }
     setBusy(true);
     try {
-      await api.renameKey("private", dialog.entry.fingerprint, dialog.alias);
+      await api.renameKey("private", dialog.entry.fingerprint, alias);
       await refresh("private");
       showStatusToast("StatusKeyRenamed");
-      setDialog({ kind: "closed" });
+      close();
     } catch (error) {
       showErrorToast(error);
     } finally {
@@ -220,7 +108,7 @@ export function PrivateKeysPage() {
       await api.deleteKey("private", dialog.entry.fingerprint);
       await refresh("private");
       showStatusToast("StatusKeyDeleted");
-      setDialog({ kind: "closed" });
+      close();
     } catch (error) {
       showErrorToast(error);
     } finally {
@@ -265,19 +153,11 @@ export function PrivateKeysPage() {
     },
     {
       labelKey: t("ChangePasswordMenuText"),
-      onSelect: () =>
-        setDialog({
-          kind: "changePassword",
-          entry,
-          oldPassword: "",
-          newPassword: "",
-          confirm: "",
-          remember: false,
-        }),
+      onSelect: () => setDialog({ kind: "changePassword", entry }),
     },
     {
       labelKey: t("RenameKeyMenuText"),
-      onSelect: () => setDialog({ kind: "rename", entry, alias: entry.alias }),
+      onSelect: () => setDialog({ kind: "rename", entry }),
     },
     {
       labelKey: t("DeleteKeyMenuText"),
@@ -289,11 +169,11 @@ export function PrivateKeysPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <div className="flex flex-wrap gap-2">
-        <Button onClick={startGenerate} disabled={generation !== null}>
+        <Button onClick={() => setDialog({ kind: "generate" })} disabled={generation !== null}>
           <CirclePlus className="size-4" />
           {t("GeneratePrivateKeyButton.Text")}
         </Button>
-        <Button variant="outline" onClick={startImport}>
+        <Button variant="outline" onClick={() => setDialog({ kind: "import" })}>
           <Import className="size-4" />
           {t("ImportPrivateKeyButton.Text")}
         </Button>
@@ -327,284 +207,50 @@ export function PrivateKeysPage() {
         ))
       )}
 
-      {/* 生成密钥 */}
-      <Dialog
-        open={dialog.kind === "generate"}
-        onOpenChange={(open) => !open && setDialog({ kind: "closed" })}
-      >
-        {dialog.kind === "generate" ? (
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t("GenerateKeyDialogTitle")}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="generate-alias">{t("ImportKeyAliasBox.Header")}</Label>
-                <Input
-                  id="generate-alias"
-                  value={dialog.alias}
-                  onChange={(event) => setDialog({ ...dialog, alias: event.target.value })}
-                  placeholder={t("ImportKeyAliasBox.PlaceholderText")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="generate-size">{t("RsaKeySizeComboBox.Header")}</Label>
-                <Select
-                  value={String(dialog.keySize)}
-                  onValueChange={(value) =>
-                    setDialog({ ...dialog, keySize: Number(value) })
-                  }
-                >
-                  <SelectTrigger id="generate-size" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RSA_KEY_SIZES.map((size) => (
-                      <SelectItem key={size} value={String(size)}>
-                        RSA{size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="generate-password">{t("PrivateKeyPasswordBox.Header")}</Label>
-                <Input
-                  id="generate-password"
-                  type="password"
-                  value={dialog.password}
-                  onChange={(event) => setDialog({ ...dialog, password: event.target.value })}
-                  placeholder={t("PrivateKeyPasswordBox.PlaceholderText")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="generate-confirm">{t("ConfirmPasswordBox.Header")}</Label>
-                <Input
-                  id="generate-confirm"
-                  type="password"
-                  value={dialog.confirm}
-                  onChange={(event) => setDialog({ ...dialog, confirm: event.target.value })}
-                  placeholder={t("ConfirmPasswordBox.PlaceholderText")}
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={dialog.remember}
-                  onCheckedChange={(checked) =>
-                    setDialog({ ...dialog, remember: checked === true })
-                  }
-                />
-                {t("RememberPrivateKeyPasswordCheckBox.Content")}
-              </label>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialog({ kind: "closed" })}>
-                {t("DialogCancelButtonText")}
-              </Button>
-              <Button onClick={() => void submitGenerate()} disabled={busy}>
-                {t("DialogOkButtonText")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        ) : null}
-      </Dialog>
+      {dialog.kind === "generate" ? (
+        <GenerateKeyDialog
+          open
+          defaultAlias={t("DefaultPrivateKeyAlias", { 0: privateKeys.length + 1 })}
+          onCancel={close}
+          onSubmit={(args) => {
+            close();
+            void startGeneration(args);
+          }}
+        />
+      ) : null}
 
-      {/* 导入私钥 */}
-      <Dialog
-        open={dialog.kind === "import"}
-        onOpenChange={(open) => !open && setDialog({ kind: "closed" })}
-      >
-        {dialog.kind === "import" ? (
-          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>{t("ImportPrivateKeyDialogTitle")}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="import-private-alias">{t("ImportKeyAliasBox.Header")}</Label>
-                <Input
-                  id="import-private-alias"
-                  value={dialog.alias}
-                  onChange={(event) => setDialog({ ...dialog, alias: event.target.value })}
-                  placeholder={t("ImportKeyAliasBox.PlaceholderText")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="import-private-password">{t("PrivateKeyPasswordBox.Header")}</Label>
-                <Input
-                  id="import-private-password"
-                  type="password"
-                  value={dialog.password}
-                  onChange={(event) => setDialog({ ...dialog, password: event.target.value })}
-                  placeholder={t("PrivateKeyPasswordBox.PlaceholderText")}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t("RememberPrivateKeyPasswordCheckBox.Content")}
-                </p>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={dialog.remember}
-                  onCheckedChange={(checked) =>
-                    setDialog({ ...dialog, remember: checked === true })
-                  }
-                />
-                {t("RememberPrivateKeyPasswordCheckBox.Content")}
-              </label>
-              <Button variant="outline" onClick={() => void handleImportFromFile()}>
-                <FileUp className="size-4" />
-                {t("ImportPrivateKeyFromFileButtonText")}
-              </Button>
-              <div className="space-y-2">
-                <Label htmlFor="import-private-content">{t("ImportPrivateKeyTextBox.Header")}</Label>
-                <Textarea
-                  id="import-private-content"
-                  value={dialog.content}
-                  onChange={(event) => setDialog({ ...dialog, content: event.target.value })}
-                  placeholder={t("ImportPrivateKeyTextBox.PlaceholderText")}
-                  className="max-h-48 min-h-40 overflow-y-auto font-mono text-xs"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialog({ kind: "closed" })}>
-                {t("DialogCancelButtonText")}
-              </Button>
-              <Button onClick={() => void submitImport()} disabled={busy}>
-                {t("DialogOkButtonText")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        ) : null}
-      </Dialog>
+      {dialog.kind === "import" ? (
+        <ImportPrivateKeyDialog
+          open
+          defaultAlias={t("DefaultPrivateKeyAlias", { 0: privateKeys.length + 1 })}
+          busy={busy}
+          onCancel={close}
+          onSubmit={(args) => void submitImport(args)}
+        />
+      ) : null}
 
-      {/* 修改密码 */}
-      <Dialog
-        open={dialog.kind === "changePassword"}
-        onOpenChange={(open) => !open && setDialog({ kind: "closed" })}
-      >
-        {dialog.kind === "changePassword" ? (
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t("ChangePasswordDialogTitle")}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="change-old">{t("OldPasswordBox.Header")}</Label>
-                <Input
-                  id="change-old"
-                  type="password"
-                  value={dialog.oldPassword}
-                  onChange={(event) =>
-                    setDialog({ ...dialog, oldPassword: event.target.value })
-                  }
-                  placeholder={t("OldPasswordBox.PlaceholderText")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="change-new">{t("NewPasswordBox.Header")}</Label>
-                <Input
-                  id="change-new"
-                  type="password"
-                  value={dialog.newPassword}
-                  onChange={(event) =>
-                    setDialog({ ...dialog, newPassword: event.target.value })
-                  }
-                  placeholder={t("NewPasswordBox.PlaceholderText")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="change-confirm">{t("ConfirmNewPasswordBox.Header")}</Label>
-                <Input
-                  id="change-confirm"
-                  type="password"
-                  value={dialog.confirm}
-                  onChange={(event) => setDialog({ ...dialog, confirm: event.target.value })}
-                  placeholder={t("ConfirmNewPasswordBox.PlaceholderText")}
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={dialog.remember}
-                  onCheckedChange={(checked) =>
-                    setDialog({ ...dialog, remember: checked === true })
-                  }
-                />
-                {t("RememberPrivateKeyPasswordCheckBox.Content")}
-              </label>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialog({ kind: "closed" })}>
-                {t("DialogCancelButtonText")}
-              </Button>
-              <Button onClick={() => void submitChangePassword()} disabled={busy}>
-                {t("DialogOkButtonText")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        ) : null}
-      </Dialog>
+      {dialog.kind === "changePassword" ? (
+        <ChangePasswordDialog open busy={busy} onCancel={close} onSubmit={(args) => void submitChangePassword(args)} />
+      ) : null}
 
-      {/* 重命名 */}
-      <Dialog
-        open={dialog.kind === "rename"}
-        onOpenChange={(open) => !open && setDialog({ kind: "closed" })}
-      >
-        {dialog.kind === "rename" ? (
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t("RenameKeyDialogTitle")}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-2">
-              <Label htmlFor="rename-private-alias">{t("RenameKeyAliasBox.Header")}</Label>
-              <Input
-                id="rename-private-alias"
-                value={dialog.alias}
-                onChange={(event) => setDialog({ ...dialog, alias: event.target.value })}
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialog({ kind: "closed" })}>
-                {t("DialogCancelButtonText")}
-              </Button>
-              <Button onClick={() => void submitRename()} disabled={busy}>
-                {t("DialogOkButtonText")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        ) : null}
-      </Dialog>
+      {dialog.kind === "rename" ? (
+        <RenameKeyDialog
+          open
+          initialAlias={dialog.entry.alias}
+          busy={busy}
+          onCancel={close}
+          onSubmit={(alias) => void submitRename(alias)}
+        />
+      ) : null}
 
-      {/* 删除确认 */}
-      <AlertDialog
+      <DeleteKeyDialog
         open={dialog.kind === "delete"}
-        onOpenChange={(open) => !open && setDialog({ kind: "closed" })}
-      >
-        {dialog.kind === "delete" ? (
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("DeletePrivateKeyDialogTitle")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("DeleteKeyDialogContent", { 0: dialog.entry.alias })}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setDialog({ kind: "closed" })}>
-                {t("DialogCancelButtonText")}
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={(event) => {
-                  event.preventDefault();
-                  void submitDelete();
-                }}
-                className="bg-destructive text-white hover:bg-destructive/90"
-              >
-                {t("DialogDeleteButtonText")}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        ) : null}
-      </AlertDialog>
+        titleKey="DeletePrivateKeyDialogTitle"
+        entryAlias={dialog.kind === "delete" ? dialog.entry.alias : ""}
+        busy={busy}
+        onCancel={close}
+        onDelete={() => void submitDelete()}
+      />
     </div>
   );
 }
