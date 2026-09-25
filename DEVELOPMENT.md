@@ -121,6 +121,11 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 
 ## 10. 开发日志
 
+### 2026-09-25（夜）
+
+- 图标修正：src-tauri/icons 此前仍是脚手架默认 Tauri 图标。已从原版应用 `messagesencrypter.ico` 提取 256px 帧（ICO 内嵌 PNG 手工解析，GDI+ 不支持 PNG 压缩帧）作为源，`pnpm tauri icon` 重新生成全套图标（含 icon.ico 多尺寸与 Square/Store 变体；android/ios 产物已删除）。
+- 注意：修改 icons/ 不会触发 build.rs 重跑（资源嵌入被缓存），需 `touch src-tauri/build.rs` 后重新构建；已用 `ExtractAssociatedIcon` 从新 exe 抽图验证嵌入正确。
+
 ### 2026-09-25（晚）
 
 - **打包发布落地（仅 msixbundle，微软商店）**，方案与既有 Tauri 项目实践一致：
