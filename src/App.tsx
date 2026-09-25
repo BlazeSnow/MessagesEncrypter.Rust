@@ -45,7 +45,7 @@ function Shell() {
         : null;
 
   const content: Record<PageId, ReactNode> = {
-    home: <HomePage />,
+    home: <HomePage onNavigate={setPage} />,
     encrypt: <EncryptPage />,
     decrypt: <DecryptPage />,
     recipient: <RecipientKeysPage />,
