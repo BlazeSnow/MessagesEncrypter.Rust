@@ -173,7 +173,7 @@ export function DecryptPage() {
               value={cipher}
               onChange={(event) => setCipher(event.target.value)}
               placeholder={t("CipherTextBox.PlaceholderText")}
-              className="min-h-40 font-mono text-xs"
+              className="max-h-64 min-h-40 overflow-y-auto font-mono text-xs"
             />
           </div>
           <div className="flex gap-2">
@@ -197,7 +197,7 @@ export function DecryptPage() {
               value={plain}
               readOnly
               placeholder={t("DecryptedMessageTextBox.PlaceholderText")}
-              className="min-h-40"
+              className="max-h-64 min-h-40 overflow-y-auto"
             />
           </div>
         </CardContent>

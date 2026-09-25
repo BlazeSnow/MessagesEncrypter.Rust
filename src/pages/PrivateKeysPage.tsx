@@ -423,7 +423,7 @@ export function PrivateKeysPage() {
         onOpenChange={(open) => !open && setDialog({ kind: "closed" })}
       >
         {dialog.kind === "import" ? (
-          <DialogContent className="max-w-xl">
+          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>{t("ImportPrivateKeyDialogTitle")}</DialogTitle>
             </DialogHeader>
@@ -470,7 +470,7 @@ export function PrivateKeysPage() {
                   value={dialog.content}
                   onChange={(event) => setDialog({ ...dialog, content: event.target.value })}
                   placeholder={t("ImportPrivateKeyTextBox.PlaceholderText")}
-                  className="min-h-40 font-mono text-xs"
+                  className="max-h-48 min-h-40 overflow-y-auto font-mono text-xs"
                 />
               </div>
             </div>

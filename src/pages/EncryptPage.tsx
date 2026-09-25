@@ -120,7 +120,7 @@ export function EncryptPage() {
               value={plain}
               onChange={(event) => setPlain(event.target.value)}
               placeholder={t("PlainTextBox.PlaceholderText")}
-              className="min-h-44"
+              className="max-h-64 min-h-44 overflow-y-auto"
             />
           </div>
           <div className="flex gap-2">
@@ -144,7 +144,7 @@ export function EncryptPage() {
               value={encrypted}
               readOnly
               placeholder={t("EncryptedMessageTextBox.PlaceholderText")}
-              className="min-h-44 font-mono text-xs"
+              className="max-h-64 min-h-44 overflow-y-auto font-mono text-xs"
             />
           </div>
         </CardContent>

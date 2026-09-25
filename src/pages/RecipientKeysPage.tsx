@@ -171,7 +171,7 @@ export function RecipientKeysPage() {
         onOpenChange={(open) => !open && setDialog({ kind: "closed" })}
       >
         {dialog.kind === "import" ? (
-          <DialogContent className="max-w-xl">
+          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>{t("ImportRecipientKeyDialogTitle")}</DialogTitle>
             </DialogHeader>
@@ -200,7 +200,7 @@ export function RecipientKeysPage() {
                     setDialog({ ...dialog, content: event.target.value })
                   }
                   placeholder={t("ImportPublicKeyTextBox.PlaceholderText")}
-                  className="min-h-40 font-mono text-xs"
+                  className="max-h-48 min-h-40 overflow-y-auto font-mono text-xs"
                 />
               </div>
             </div>
