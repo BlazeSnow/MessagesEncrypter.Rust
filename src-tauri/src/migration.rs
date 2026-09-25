@@ -163,6 +163,45 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "machine state: requires real legacy LocalState + credential"]
+    fn legacy_machine_store_migrates_without_tamper_warning() {
+        let Some(legacy) = legacy_local_state_dir() else {
+            panic!("本机不存在旧版 LocalState 目录，无法验证");
+        };
+        let dir = temp_dir("machine");
+        let db = dir.join("keys.db");
+        std::fs::copy(legacy.join("keys.db"), &db).unwrap();
+        std::fs::copy(legacy.join("keys.db.sig"), crate::integrity::signature_path(&db)).unwrap();
+
+        let key = crate::credman::INTEGRITY_KEY_TARGET_NAME;
+        // 1. 未修改的原始库：旧版签名 + 旧版权据密钥必须通过（BOM 剥离 + 凭据回读）。
+        let state = crate::integrity::verify_file(&db, key).unwrap();
+        assert_eq!(
+            state,
+            crate::integrity::IntegrityState::Ok,
+            "旧版签名应在未修改的库上通过"
+        );
+
+        // 2. 本版结构调整（settings 表）+ 重签（模拟首启动 ensure_database）。
+        crate::keystore::ensure_database(&db, key, state == crate::integrity::IntegrityState::Ok)
+            .unwrap();
+
+        // 3. 调整后校验仍通过（迁移用户收不到篡改警告）。
+        assert_eq!(crate::integrity::verify_file(&db, key).unwrap(), crate::integrity::IntegrityState::Ok);
+
+        // 4. 幂等：再次 ensure 不再变更、校验依旧通过。
+        crate::keystore::ensure_database(&db, key, true).unwrap();
+        assert_eq!(crate::integrity::verify_file(&db, key).unwrap(), crate::integrity::IntegrityState::Ok);
+
+        // 5. 旧版密钥全部保留。
+        let total = crate::keystore::list_keys(&db, crate::keystore::CATEGORY_RECIPIENT).unwrap().len()
+            + crate::keystore::list_keys(&db, crate::keystore::CATEGORY_PRIVATE).unwrap().len();
+        assert!(total > 0, "迁移后应保留旧版密钥");
+
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn package_family_suffix_matches_known_values() {
         // 微软发布者的已知 PFN 后缀（WindowsTerminal 等）。
         assert_eq!(

@@ -37,6 +37,7 @@
 ## 3. 决策记录（按日期）
 
 ### 2026-09-26
+0. **旧版数据迁移适配**：用旧版真实生成的 keys.db/签名端到端验证，修复两处必然触发篡改警告的问题——(a) 旧版（C#）签名文件带 UTF-8 BOM，verify 需显式剥离；(b) 首启动顺序改为「先校验原始库 → 再加 settings 表等结构调整（仅校验通过时重签）→ 完成」，结构调整改变库字节后必须重签，否则迁移用户必收篡改警告。本机验证测试 `legacy_machine_store_migrates_without_tamper_warning`（#[ignore]，依赖真实 LocalState + 凭据）全流程通过：原始签名校验 Ok → 调整 + 重签 Ok → 幂等 Ok → 5 把密钥保留；新旧版凭据密钥同名共用，旧版随后打开亦不受影响。
 1. **仓库链接**：设置页指向本仓库 `github.com/BlazeSnow/MessagesEncrypter.Rust`；references/ 中旧仓库 URL 属历史事实不改。
 2. **测试体系**：后端 40 项（协议/密钥/密钥库/完整性/PFN/迁移落盘/凭据回环/命令层）；前端 18 项（vitest + jsdom + @testing-library）。环境垫片：jsdom 缺 PointerEvent 与 scrollIntoView（Radix Select 依赖）；vitest globals 关闭时 RTL 自动 cleanup 不生效需手动注册；Radix Select 在 jsdom 用键盘驱动（鼠标点击无法展开属已知限制）。发布流水线加前端/后端测试门禁。
 3. **深色模式**：CSS 令牌早已跟随系统，补 `color-scheme`（滚动条）+ 启动 WebView 底色预设（白闪）+ sonner 复核（默认 system 无需改）。

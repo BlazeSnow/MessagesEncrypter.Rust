@@ -82,13 +82,17 @@ fn table_columns(conn: &Connection, table: &str) -> AppResult<Vec<String>> {
     Ok(columns)
 }
 
-/// 建库/建表 + 迁移；返回是否发生了迁移（含建表）。迁移后用 `key_target` 重签。
-pub fn ensure_database(db_path: &Path, key_target: &str) -> AppResult<bool> {
+/// 建库/建表 + 迁移；返回是否发生了迁移（含建表）。
+/// 本版会新增 `settings` 表，这也会改变库字节——发生任何变更后需重签，
+/// 否则迁移进来的旧签名会失配、用户收到篡改警告。
+/// `allow_sign = false`（完整性校验失败时）跳过重签，避免掩盖篡改。
+pub fn ensure_database(db_path: &Path, key_target: &str, allow_sign: bool) -> AppResult<bool> {
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent).map_err(|_| internal_error())?;
     }
     let conn = open_connection(db_path)?;
     let mut migrated = false;
+    let mut created_settings = false;
 
     let table_exists: bool = conn
         .query_row(
@@ -121,11 +125,22 @@ pub fn ensure_database(db_path: &Path, key_target: &str) -> AppResult<bool> {
         migrated = true;
     }
 
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-        [],
-    )
-    .map_err(|_| internal_error())?;
+    let settings_exists: bool = conn
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='settings'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|_| internal_error())?
+        > 0;
+    if !settings_exists {
+        conn.execute(
+            "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .map_err(|_| internal_error())?;
+        created_settings = true;
+    }
 
     // 旧版 keys.json 迁移：仅当库中无密钥时执行；完成后改名 `.migrated`。
     let count: i64 = conn
@@ -146,8 +161,11 @@ pub fn ensure_database(db_path: &Path, key_target: &str) -> AppResult<bool> {
         }
     }
 
-    if migrated {
-        integrity::sign_file(db_path, key_target, false)?;
+    if migrated || created_settings {
+        if allow_sign {
+            integrity::sign_file(db_path, key_target, false)?;
+        }
+        migrated = true;
     }
     Ok(migrated)
 }
@@ -374,7 +392,7 @@ mod tests {
         let dir = temp_dir("fresh");
         let db = dir.join("keys.db");
         let target = test_key_target("fresh");
-        ensure_database(&db, &target).unwrap();
+        ensure_database(&db, &target, true).unwrap();
         assert!(db.exists());
         assert!(integrity::signature_path(&db).exists());
         assert_eq!(
@@ -390,7 +408,7 @@ mod tests {
         let dir = temp_dir("roundtrip");
         let db = dir.join("keys.db");
         let target = test_key_target("roundtrip");
-        ensure_database(&db, &target).unwrap();
+        ensure_database(&db, &target, true).unwrap();
 
         assert!(insert_key(&db, &record(CATEGORY_RECIPIENT, "乙", "FP2"), 0).unwrap());
         assert!(insert_key(&db, &record(CATEGORY_RECIPIENT, "甲", "FP1"), 1).unwrap());
@@ -423,7 +441,7 @@ mod tests {
         let dir = temp_dir("settings");
         let db = dir.join("keys.db");
         let target = test_key_target("settings");
-        ensure_database(&db, &target).unwrap();
+        ensure_database(&db, &target, true).unwrap();
 
         set_setting(&db, SETTING_DISPLAY_LANGUAGE, "zh-Hans").unwrap();
         integrity::sign_file(&db, &target, false).unwrap();
@@ -464,7 +482,7 @@ mod tests {
             .unwrap();
         }
 
-        ensure_database(&db, &target).unwrap();
+        ensure_database(&db, &target, true).unwrap();
         let columns = table_columns(&Connection::open(&db).unwrap(), "keys").unwrap();
         assert!(!columns.iter().any(|c| c == "id"));
         // 重复指纹被忽略：4 行迁移后剩 3。
@@ -497,7 +515,7 @@ mod tests {
         )
         .unwrap();
 
-        ensure_database(&db, &target).unwrap();
+        ensure_database(&db, &target, true).unwrap();
         assert!(dir.join("keys.json.migrated").exists());
         assert!(!dir.join("keys.json").exists());
         let recipient = list_keys(&db, CATEGORY_RECIPIENT).unwrap();

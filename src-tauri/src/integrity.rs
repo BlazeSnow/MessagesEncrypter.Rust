@@ -109,7 +109,8 @@ pub fn verify_file(db_path: &Path, key_target: &str) -> AppResult<IntegrityState
         Ok(t) => t,
         Err(_) => return Ok(IntegrityState::Invalid),
     };
-    let stored = match crate::keys::base64_decode(text.trim()) {
+    // 旧版（C#）写入的签名文件带 UTF-8 BOM，trim 不会剥掉它，需显式去除。
+    let stored = match crate::keys::base64_decode(text.trim().trim_start_matches('\u{feff}')) {
         Some(s) => s,
         None => return Ok(IntegrityState::Invalid),
     };
@@ -191,6 +192,18 @@ mod tests {
             verify_file(&db, &target).unwrap(),
             IntegrityState::SignatureMissing
         );
+        cleanup(&dir, &target);
+    }
+
+    #[test]
+    fn signature_with_utf8_bom_is_tolerated() {
+        // 旧版（C#）写签名文件默认带 UTF-8 BOM；本版 verify 必须剥掉。
+        let (dir, db) = temp_db("bom");
+        let target = unique_target("bom");
+        sign_file(&db, &target, false).unwrap();
+        let sig = std::fs::read_to_string(signature_path(&db)).unwrap();
+        std::fs::write(signature_path(&db), format!("\u{feff}{sig}")).unwrap();
+        assert_eq!(verify_file(&db, &target).unwrap(), IntegrityState::Ok);
         cleanup(&dir, &target);
     }
 

@@ -52,9 +52,26 @@ pub fn run() {
             // 首次运行迁移旧版密钥库（含签名文件），随后建库/迁移并校验完整性。
             migration::migrate_legacy_store(&data_dir)?;
             let db_path = data_dir.join("keys.db");
-            keystore::ensure_database(&db_path, credman::INTEGRITY_KEY_TARGET_NAME)?;
-            let integrity_state =
-                integrity::verify_file(&db_path, credman::INTEGRITY_KEY_TARGET_NAME)?;
+            // 先用（可能来自旧版的）签名在未被修改的原始库上校验——篡改不会被
+            // 本版结构调整掩盖；校验通过后再做结构调整（settings 表等）并重签，
+            // 迁移用户不会收到篡改警告。
+            let integrity_state = if db_path.exists() {
+                let state =
+                    integrity::verify_file(&db_path, credman::INTEGRITY_KEY_TARGET_NAME)?;
+                keystore::ensure_database(
+                    &db_path,
+                    credman::INTEGRITY_KEY_TARGET_NAME,
+                    state == integrity::IntegrityState::Ok,
+                )?;
+                state
+            } else {
+                keystore::ensure_database(
+                    &db_path,
+                    credman::INTEGRITY_KEY_TARGET_NAME,
+                    true,
+                )?;
+                integrity::IntegrityState::Ok
+            };
 
             app.manage(AppState {
                 data_dir,
