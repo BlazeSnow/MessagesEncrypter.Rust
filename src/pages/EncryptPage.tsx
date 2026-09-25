@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -100,67 +99,60 @@ export function EncryptPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("PageTitleEncrypt")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="recipient-key">{t("RecipientKeyComboBox.Header")}</Label>
-            <Select value={selected} onValueChange={handleSelectChange}>
-              <SelectTrigger id="recipient-key" className="w-full">
-                <SelectValue placeholder={t("RecipientKeyComboBox.Placeholder")} />
-              </SelectTrigger>
-              <SelectContent>
-                {recipientKeys.map((key) => (
-                  <SelectItem key={key.fingerprint} value={key.fingerprint}>
-                    {key.alias}{" "}
-                    <span className="text-muted-foreground">({key.fingerprint})</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="plain-text">{t("PlainTextBox.Header")}</Label>
-            <Textarea
-              id="plain-text"
-              value={plain}
-              onChange={(event) => setPlain(event.target.value)}
-              placeholder={t("PlainTextBox.PlaceholderText")}
-              className="max-h-64 min-h-44 overflow-y-auto"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => void handleEncrypt()} disabled={busy}>
-              {busy ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Lock className="size-4" />
-              )}
-              {t("EncryptButton.Text")}
-            </Button>
-            <Button variant="outline" onClick={() => void handleCopy()} disabled={!encrypted}>
-              <Copy className="size-4" />
-              {t("CopyEncryptedMessageButton.Text")}
-            </Button>
-            <Button variant="outline" onClick={handleClear}>
-              <Eraser className="size-4" />
-              {t("ClearEncryptButton.Text")}
-            </Button>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="encrypted-message">{t("EncryptedMessageTextBox.Header")}</Label>
-            <Textarea
-              id="encrypted-message"
-              value={encrypted}
-              readOnly
-              placeholder={t("EncryptedMessageTextBox.PlaceholderText")}
-              className="max-h-64 min-h-44 overflow-y-auto font-mono text-xs"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-2">
+        <Label htmlFor="recipient-key">{t("RecipientKeyComboBox.Header")}</Label>
+        <Select value={selected} onValueChange={handleSelectChange}>
+          <SelectTrigger id="recipient-key" className="w-full">
+            <SelectValue placeholder={t("RecipientKeyComboBox.Placeholder")} />
+          </SelectTrigger>
+          <SelectContent>
+            {recipientKeys.map((key) => (
+              <SelectItem key={key.fingerprint} value={key.fingerprint}>
+                {key.alias}{" "}
+                <span className="text-muted-foreground">({key.fingerprint})</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="plain-text">{t("PlainTextBox.Header")}</Label>
+        <Textarea
+          id="plain-text"
+          value={plain}
+          onChange={(event) => setPlain(event.target.value)}
+          placeholder={t("PlainTextBox.PlaceholderText")}
+          className="max-h-64 min-h-44 overflow-y-auto"
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button onClick={() => void handleEncrypt()} disabled={busy}>
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Lock className="size-4" />
+          )}
+          {t("EncryptButton.Text")}
+        </Button>
+        <Button variant="outline" onClick={() => void handleCopy()} disabled={!encrypted}>
+          <Copy className="size-4" />
+          {t("CopyEncryptedMessageButton.Text")}
+        </Button>
+        <Button variant="outline" onClick={handleClear}>
+          <Eraser className="size-4" />
+          {t("ClearEncryptButton.Text")}
+        </Button>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="encrypted-message">{t("EncryptedMessageTextBox.Header")}</Label>
+        <Textarea
+          id="encrypted-message"
+          value={encrypted}
+          readOnly
+          placeholder={t("EncryptedMessageTextBox.PlaceholderText")}
+          className="max-h-64 min-h-44 overflow-y-auto font-mono text-xs"
+        />
+      </div>
     </div>
   );
 }

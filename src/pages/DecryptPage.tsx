@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -153,98 +152,91 @@ export function DecryptPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("PageTitleDecrypt")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="private-key">{t("PrivateKeyComboBox.Header")}</Label>
-            <Select value={selected} onValueChange={handleSelectChange}>
-              <SelectTrigger id="private-key" className="w-full">
-                <SelectValue placeholder={t("PrivateKeyComboBox.Placeholder")} />
-              </SelectTrigger>
-              <SelectContent>
-                {privateKeys.map((key) => (
-                  <SelectItem key={key.fingerprint} value={key.fingerprint}>
-                    {key.alias}{" "}
-                    <span className="text-muted-foreground">({key.fingerprint})</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="cipher-text">{t("CipherTextBox.Header")}</Label>
-            <Textarea
-              id="cipher-text"
-              value={cipher}
-              onChange={(event) => setCipher(event.target.value)}
-              placeholder={t("CipherTextBox.PlaceholderText")}
-              className="max-h-64 min-h-40 overflow-y-auto font-mono text-xs"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => void handleDecrypt()} disabled={busy}>
-              {busy ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <LockKeyhole className="size-4" />
-              )}
-              {t("DecryptButton.Text")}
-            </Button>
-            <Button variant="outline" onClick={() => void handlePaste()}>
-              <ClipboardPaste className="size-4" />
-              {t("PasteCipherButton.Text")}
-            </Button>
-            <Button variant="outline" onClick={handleClear}>
-              <Eraser className="size-4" />
-              {t("ClearDecryptButton.Text")}
-            </Button>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="decrypted-message">{t("DecryptedMessageTextBox.Header")}</Label>
-            <Textarea
-              id="decrypted-message"
-              value={plain}
-              readOnly
-              placeholder={t("DecryptedMessageTextBox.PlaceholderText")}
-              className="max-h-64 min-h-40 overflow-y-auto"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-2">
+        <Label htmlFor="private-key">{t("PrivateKeyComboBox.Header")}</Label>
+        <Select value={selected} onValueChange={handleSelectChange}>
+          <SelectTrigger id="private-key" className="w-full">
+            <SelectValue placeholder={t("PrivateKeyComboBox.Placeholder")} />
+          </SelectTrigger>
+          <SelectContent>
+            {privateKeys.map((key) => (
+              <SelectItem key={key.fingerprint} value={key.fingerprint}>
+                {key.alias}{" "}
+                <span className="text-muted-foreground">({key.fingerprint})</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="cipher-text">{t("CipherTextBox.Header")}</Label>
+        <Textarea
+          id="cipher-text"
+          value={cipher}
+          onChange={(event) => setCipher(event.target.value)}
+          placeholder={t("CipherTextBox.PlaceholderText")}
+          className="max-h-64 min-h-40 overflow-y-auto font-mono text-xs"
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button onClick={() => void handleDecrypt()} disabled={busy}>
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <LockKeyhole className="size-4" />
+          )}
+          {t("DecryptButton.Text")}
+        </Button>
+        <Button variant="outline" onClick={() => void handlePaste()}>
+          <ClipboardPaste className="size-4" />
+          {t("PasteCipherButton.Text")}
+        </Button>
+        <Button variant="outline" onClick={handleClear}>
+          <Eraser className="size-4" />
+          {t("ClearDecryptButton.Text")}
+        </Button>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="decrypted-message">{t("DecryptedMessageTextBox.Header")}</Label>
+        <Textarea
+          id="decrypted-message"
+          value={plain}
+          readOnly
+          placeholder={t("DecryptedMessageTextBox.PlaceholderText")}
+          className="max-h-64 min-h-40 overflow-y-auto"
+        />
+      </div>
 
       <Dialog open={unlockOpen} onOpenChange={setUnlockOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("UnlockPrivateKeyDialogTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("UnlockPrivateKeyDialogMessage", { 0: selectedEntry?.alias ?? "" })}
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            type="password"
-            value={unlockPassword}
-            onChange={(event) => setUnlockPassword(event.target.value)}
-            placeholder={t("UnlockPrivateKeyPasswordBox.PlaceholderText")}
-          />
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={rememberPassword}
-              onCheckedChange={(checked) => setRememberPassword(checked === true)}
-            />
-            {t("RememberPrivateKeyPasswordCheckBox.Content")}
-          </label>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setUnlockOpen(false)}>
-              {t("DialogCancelButtonText")}
-            </Button>
-            <Button onClick={() => void handleUnlock()} disabled={busy}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              {t("DialogUnlockButtonText")}
-            </Button>
-          </DialogFooter>
+      <DialogHeader>
+        <DialogTitle>{t("UnlockPrivateKeyDialogTitle")}</DialogTitle>
+        <DialogDescription>
+          {t("UnlockPrivateKeyDialogMessage", { 0: selectedEntry?.alias ?? "" })}
+        </DialogDescription>
+      </DialogHeader>
+      <Input
+        type="password"
+        value={unlockPassword}
+        onChange={(event) => setUnlockPassword(event.target.value)}
+        placeholder={t("UnlockPrivateKeyPasswordBox.PlaceholderText")}
+      />
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={rememberPassword}
+          onCheckedChange={(checked) => setRememberPassword(checked === true)}
+        />
+        {t("RememberPrivateKeyPasswordCheckBox.Content")}
+      </label>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setUnlockOpen(false)}>
+          {t("DialogCancelButtonText")}
+        </Button>
+        <Button onClick={() => void handleUnlock()} disabled={busy}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          {t("DialogUnlockButtonText")}
+        </Button>
+      </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
