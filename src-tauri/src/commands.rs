@@ -365,11 +365,14 @@ pub async fn has_saved_password(
 }
 
 /// 导出密钥到导出目录（默认下载目录），并在资源管理器中定位文件。
+/// `part = Some("public")`：导出私钥条目对应的公钥（.pub，原版「我的私钥」页同款能力）；
+/// 默认导出条目本体（私钥 → 加密 .pem，公钥 → .pub）。
 #[tauri::command]
 pub async fn export_key(
     state: State<'_, AppState>,
     category: String,
     fingerprint: String,
+    part: Option<String>,
 ) -> AppResult<String> {
     validate_category(&category)?;
     state.require_healthy_store()?;
@@ -377,19 +380,21 @@ pub async fn export_key(
     join_blocking(spawn_blocking(move || {
         let record =
             keystore::get_key(&db_path, &category, &fingerprint)?.ok_or_else(internal_error)?;
-        let (extension, content) = match category.as_str() {
-            CATEGORY_RECIPIENT => (
+        let export_public = category == CATEGORY_RECIPIENT || part.as_deref() == Some("public");
+        let (extension, content) = if export_public {
+            (
                 "pub",
                 record
                     .public_key_pem
                     .ok_or_else(|| AppError::new("ErrorPublicKeyRequired"))?,
-            ),
-            _ => (
+            )
+        } else {
+            (
                 "pem",
                 record
                     .encrypted_private_key_pem
                     .ok_or_else(|| AppError::new("ErrorPrivateKeyRequired"))?,
-            ),
+            )
         };
 
         let folder = keystore::get_setting(&db_path, keystore::SETTING_EXPORT_FOLDER_PATH)?

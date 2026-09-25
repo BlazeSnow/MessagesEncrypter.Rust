@@ -86,8 +86,12 @@ export const api = {
   hasSavedPassword: (privateFingerprint: string) =>
     invoke<boolean>("has_saved_password", { privateFingerprint }),
 
-  exportKey: (category: KeyCategory, fingerprint: string) =>
-    invoke<string>("export_key", { category, fingerprint }),
+  exportKey: (category: KeyCategory, fingerprint: string, part?: "public" | "private") =>
+    invoke<string>("export_key", {
+      category,
+      fingerprint,
+      ...(part ? { part } : {}),
+    }),
 
   getAppSettings: () => invoke<AppSettings>("get_app_settings"),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),

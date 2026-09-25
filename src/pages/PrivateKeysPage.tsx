@@ -238,6 +238,23 @@ export function PrivateKeysPage() {
 
   const actionsFor = (entry: KeyEntry): KeyCardAction[] => [
     {
+      labelKey: t("CopyPublicKeyMenuText"),
+      onSelect: () => {
+        void (async () => {
+          if (!entry.publicKeyPem) {
+            return;
+          }
+          const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+          await writeText(entry.publicKeyPem);
+          showStatusToast("StatusPublicKeyCopied");
+        })();
+      },
+    },
+    {
+      labelKey: t("ExportPublicKeyMenuText"),
+      onSelect: () => void exportKey("private", entry.fingerprint, "public"),
+    },
+    {
       labelKey: t("CopyPrivateKeyMenuText"),
       onSelect: () => {
         void (async () => {

@@ -33,9 +33,13 @@ export async function pickKeyFile(kind: "public" | "private"): Promise<PickedKey
 }
 
 /** 导出密钥并提示（后端已在资源管理器中定位文件）。 */
-export async function exportKey(category: KeyCategory, fingerprint: string) {
+export async function exportKey(
+  category: KeyCategory,
+  fingerprint: string,
+  part?: "public" | "private",
+) {
   try {
-    await api.exportKey(category, fingerprint);
+    await api.exportKey(category, fingerprint, part);
     showStatusToast("StatusKeyExported");
   } catch (error) {
     toast.error(t("ErrorExportFailed"));
