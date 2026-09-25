@@ -121,6 +121,10 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 
 ## 10. 开发日志
 
+### 2026-09-26（四）
+
+- 修复「打开导出目录」报「发生内部错误」：根因是 `opener:allow-open-path` 权限只启用 open_path 命令，**scope 为空时 tauri fs scope 拒绝一切路径**（ForbiddenPath）——读插件源码确认 `is_path_allowed` 的空 allow 列表语义。capability 中为该权限内联授予 `allow: [{ path: "**" }]`（本应用仅本地运行，路径任意——用户可通过目录对话框选择任意位置），重建后 ACL 编译产物已验证。openExportFolder 失败时同步输出真实错误到控制台，便于以后诊断。
+
 ### 2026-09-26（三）
 
 - 修复导入弹窗被大段公钥撑变形：新版 shadcn textarea 带 `field-sizing-content`（随内容无限长高），两个导入弹窗内的 textarea 加 `max-h-48` + 内部滚动；加密/解密页四个多行输入输出框同样加 `max-h-64` 上限，长密文不再把页面拉长。

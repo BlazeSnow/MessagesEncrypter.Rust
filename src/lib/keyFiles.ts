@@ -62,7 +62,9 @@ export async function openExportFolder() {
         ? folder
         : await (await import("@tauri-apps/api/path")).downloadDir();
     await openPath(target);
-  } catch {
+  } catch (error) {
+    // open_path 失败的常见原因：配置的目录已不存在、或 capability scope 拒绝。
+    console.error("openExportFolder failed:", error);
     toast.error(t("ErrorInternal"));
   }
 }
