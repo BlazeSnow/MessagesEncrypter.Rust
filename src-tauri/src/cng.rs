@@ -71,7 +71,7 @@ pub fn generate_components(bits: usize) -> AppResult<RsaPrivateKey> {
 
 /// 解析 BCRYPT_RSAFULLPRIVATE_BLOB：
 /// 头（magic, BitLength, cbPublicExp, cbModulus, cbPrime1, cbPrime2，均 u32LE）
-/// + e, n, p, q, dp, dq, qinv, d（各块大端字节序）。
+/// + e, n, X1, p, q, X2, X3, d（各块大端字节序；X* 为 CNG 附加块）。
 fn parse_full_private_blob(blob: &[u8], bits: usize) -> AppResult<RsaPrivateKey> {
     if blob.len() < 24 {
         return Err(internal_error());
@@ -86,17 +86,24 @@ fn parse_full_private_blob(blob: &[u8], bits: usize) -> AppResult<RsaPrivateKey>
     if data.len() < total {
         return Err(internal_error());
     }
+    // 布局：e, n, p, q, d（= RSAPRIVATE 部分），随后 dp, dq, qinv（FULLPRIVATE 附加）。
     let e = BigUint::from_bytes_be(&data[0..cb_e]);
     let n = BigUint::from_bytes_be(&data[cb_e..cb_e + cb_n]);
     let p = BigUint::from_bytes_be(&data[cb_e + cb_n..cb_e + cb_n + cb_p]);
     let q = BigUint::from_bytes_be(&data[cb_e + cb_n + cb_p..cb_e + cb_n + cb_p + cb_q]);
-    let d_off = cb_e + cb_n + cb_p + cb_q * 3;
-    let d = BigUint::from_bytes_be(&data[d_off..d_off + cb_n]);
+    let d = BigUint::from_bytes_be(&data[cb_e + cb_n + cb_p * 3 + cb_q * 2..]);
 
     let key = RsaPrivateKey::from_components(n, e, d, vec![p, q])
-        .map_err(|_| internal_error())?;
-    key.validate().map_err(|_| internal_error())?;
+        .map_err(|e| {
+            eprintln!("[cng-debug] from_components failed: {e}");
+            internal_error()
+        })?;
+    key.validate().map_err(|e| {
+        eprintln!("[cng-debug] validate failed: {e}");
+        internal_error()
+    })?;
     if key.n().bits() != bits {
+        eprintln!("[cng-debug] bits mismatch: {} != {bits}", key.n().bits());
         return Err(internal_error());
     }
 
