@@ -40,6 +40,7 @@ import { RSA_KEY_SIZES } from "@/lib/api";
 import { exportKey, openExportFolder, pickKeyFile } from "@/lib/keyFiles";
 import { showErrorToast, showStatusToast, showWarningToast } from "@/lib/status";
 import { EmptyList } from "@/pages/RecipientKeysPage";
+import { useGeneration } from "@/state/generation";
 import { useKeys } from "@/state/keys";
 
 type DialogState =
@@ -74,10 +75,9 @@ type DialogState =
 export function PrivateKeysPage() {
   const { t } = useTranslation();
   const { privateKeys, refresh } = useKeys();
+  const { generation, startGeneration } = useGeneration();
   const [dialog, setDialog] = useState<DialogState>({ kind: "closed" });
   const [busy, setBusy] = useState(false);
-  // 后台密钥生成任务：对话框立即关闭，列表区显示进度，期间可继续其他操作。
-  const [generation, setGeneration] = useState<{ keySize: number } | null>(null);
 
   const startGenerate = () => {
     if (generation) {
@@ -126,24 +126,16 @@ export function PrivateKeysPage() {
       showWarningToast("ErrorPasswordConfirmMismatch");
       return;
     }
-    // 立即关闭对话框并转入后台；大位数密钥生成耗时可达数十秒到数分钟。
+    // 立即关闭对话框并转入后台（全局状态，切页不丢进度卡）；
+    // 大位数密钥生成耗时可达数十秒到数分钟。
     const { alias, keySize, password, remember } = dialog;
     setDialog({ kind: "closed" });
-    setGeneration({ keySize });
-    try {
-      await api.generateKeyPair({
-        alias,
-        keySizeBits: keySize,
-        password,
-        rememberPassword: remember,
-      });
-      showStatusToast("StatusKeyGenerated");
-    } catch (error) {
-      showErrorToast(error);
-    } finally {
-      setGeneration(null);
-      await refresh("private");
-    }
+    await startGeneration({
+      alias,
+      keySizeBits: keySize,
+      password,
+      rememberPassword: remember,
+    });
   };
 
   const submitImport = async () => {
