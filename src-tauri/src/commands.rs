@@ -415,6 +415,43 @@ pub async fn export_key(
     .await
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_file_name_replaces_invalid_chars() {
+        assert_eq!(sanitize_file_name("normal"), "normal");
+        assert_eq!(sanitize_file_name("  spaced  "), "spaced");
+        assert_eq!(
+            sanitize_file_name(r#"a<b>c:d"e/f\g|h*i?j"#),
+            "a_b_c_d_e_f_g_h_i_j"
+        );
+        assert_eq!(sanitize_file_name("中文别名"), "中文别名");
+        // 控制字符
+        assert_eq!(sanitize_file_name("a
+b"), "a_b");
+        // 全空白回退 key
+        assert_eq!(sanitize_file_name("   "), "key");
+        assert_eq!(sanitize_file_name(""), "key");
+    }
+
+    #[test]
+    fn clean_alias_trims_and_rejects_empty() {
+        assert_eq!(clean_alias("  别名  ").unwrap(), "别名");
+        assert_eq!(clean_alias("").unwrap_err().code, "ErrorKeyAliasRequired");
+        assert_eq!(clean_alias("   ").unwrap_err().code, "ErrorKeyAliasRequired");
+    }
+
+    #[test]
+    fn validate_category_only_accepts_known_values() {
+        validate_category(CATEGORY_RECIPIENT).unwrap();
+        validate_category(CATEGORY_PRIVATE).unwrap();
+        assert!(validate_category("other").is_err());
+    }
+}
+
 fn default_downloads_dir() -> String {
     std::env::var_os("USERPROFILE")
         .map(std::path::PathBuf::from)

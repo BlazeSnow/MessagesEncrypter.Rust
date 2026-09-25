@@ -164,3 +164,36 @@ pub fn write_private_key_password(fingerprint: &str, password: &str) -> Result<(
 pub fn delete_private_key_password(fingerprint: &str) -> Result<(), u32> {
     delete_credential(&private_key_password_target(fingerprint))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 读写删除回环（独立目标名，不触碰真实凭据）。
+    #[test]
+    fn write_read_delete_roundtrip() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let target = format!("MessagesEncrypter.UnitTests.Credman.{nanos}");
+
+        // 不存在 → None。
+        assert_eq!(read_credential(&target).unwrap(), None);
+
+        // 写入中文与 Emoji 均可回读。
+        let blob = wide_bytes("密码-Pass🔑");
+        write_credential(&target, &blob).unwrap();
+        assert_eq!(read_credential(&target).unwrap(), Some(blob.clone()));
+
+        // 覆盖写入。
+        let blob2 = wide_bytes("new");
+        write_credential(&target, &blob2).unwrap();
+        assert_eq!(read_credential(&target).unwrap(), Some(blob2));
+
+        // 删除后不存在；重复删除不报错（1168 视为成功）。
+        delete_credential(&target).unwrap();
+        assert_eq!(read_credential(&target).unwrap(), None);
+        delete_credential(&target).unwrap();
+    }
+}

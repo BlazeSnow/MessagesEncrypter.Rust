@@ -189,7 +189,7 @@ fn decrypt_rejects_missing_or_null_fields() {
 
 #[test]
 fn decrypt_rejects_invalid_base64_and_non_json() {
-    let (_priv_key, pub_key) = generate_key(2048);
+    let (_priv_key, _pub_key) = generate_key(2048);
     let enc_pem = encrypted_pem(&_priv_key);
     expect_code(
         decrypt_with(&enc_pem, "!!!!not-base64!!!!").unwrap_err(),

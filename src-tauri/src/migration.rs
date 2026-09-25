@@ -62,11 +62,20 @@ pub fn legacy_local_state_dir() -> Option<PathBuf> {
 
 /// 首次运行迁移：目标目录没有 keys.db 时，从旧 LocalState 复制密钥库文件。
 pub fn migrate_legacy_store(app_data_dir: &std::path::Path) -> AppResult<()> {
+    let old_dir = legacy_local_state_dir();
+    migrate_legacy_store_from(app_data_dir, old_dir.as_deref())
+}
+
+/// 迁移核心（`legacy_dir` 供测试注入，None = 无旧版数据目录）。
+pub fn migrate_legacy_store_from(
+    app_data_dir: &std::path::Path,
+    legacy_dir: Option<&std::path::Path>,
+) -> AppResult<()> {
     let db_path = app_data_dir.join("keys.db");
     if db_path.exists() {
         return Ok(());
     }
-    let Some(old_dir) = legacy_local_state_dir() else {
+    let Some(old_dir) = legacy_dir else {
         return Ok(());
     };
     let _ = std::fs::copy(old_dir.join("keys.db"), &db_path);
@@ -83,6 +92,75 @@ pub fn migrate_legacy_store(app_data_dir: &std::path::Path) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn temp_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "me-migration-{}-{tag}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn migrate_copies_db_and_signature() {
+        let legacy = temp_dir("legacy");
+        let target = temp_dir("target");
+        std::fs::write(legacy.join("keys.db"), b"legacy-db").unwrap();
+        std::fs::write(legacy.join("keys.db.sig"), b"legacy-sig").unwrap();
+
+        migrate_legacy_store_from(&target, Some(&legacy)).unwrap();
+
+        assert_eq!(std::fs::read(target.join("keys.db")).unwrap(), b"legacy-db");
+        assert_eq!(
+            std::fs::read(crate::integrity::signature_path(&target.join("keys.db"))).unwrap(),
+            b"legacy-sig"
+        );
+        assert!(!target.join("keys.json").exists());
+        std::fs::remove_dir_all(legacy).unwrap();
+        std::fs::remove_dir_all(target).unwrap();
+    }
+
+    #[test]
+    fn migrate_falls_back_to_keys_json() {
+        let legacy = temp_dir("legacy-json");
+        let target = temp_dir("target-json");
+        std::fs::write(legacy.join("keys.json"), b"{\"recipientKeys\":[],\"privateKeys\":[]}").unwrap();
+
+        migrate_legacy_store_from(&target, Some(&legacy)).unwrap();
+
+        assert!(!target.join("keys.db").exists());
+        assert_eq!(
+            std::fs::read(target.join("keys.json")).unwrap(),
+            b"{\"recipientKeys\":[],\"privateKeys\":[]}"
+        );
+        std::fs::remove_dir_all(legacy).unwrap();
+        std::fs::remove_dir_all(target).unwrap();
+    }
+
+    #[test]
+    fn migrate_skips_when_db_exists_or_no_legacy() {
+        let legacy = temp_dir("legacy-skip");
+        let target = temp_dir("target-skip");
+        std::fs::write(target.join("keys.db"), b"existing").unwrap();
+        std::fs::write(legacy.join("keys.db"), b"legacy").unwrap();
+
+        // 目标已有库：不动。
+        migrate_legacy_store_from(&target, Some(&legacy)).unwrap();
+        assert_eq!(std::fs::read(target.join("keys.db")).unwrap(), b"existing");
+
+        // 无旧目录：原样。
+        let empty_target = temp_dir("target-empty");
+        migrate_legacy_store_from(&empty_target, None).unwrap();
+        assert!(!empty_target.join("keys.db").exists());
+
+        std::fs::remove_dir_all(legacy).unwrap();
+        std::fs::remove_dir_all(target).unwrap();
+        std::fs::remove_dir_all(empty_target).unwrap();
+    }
 
     #[test]
     fn package_family_suffix_matches_known_values() {
