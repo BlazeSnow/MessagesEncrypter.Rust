@@ -9,6 +9,9 @@ const destroy = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   api: { trustKeyStore: (...a: unknown[]) => trustKeyStore(...(a as [])) },
+  // 组件 catch 分支会经 showErrorToast 调用 errorCodeOf，mock 必须提供，
+  // 否则在 CI 的异步时序下会逃逸为未处理拒绝（本地时序不同可能漏检）。
+  errorCodeOf: () => "ErrorInternal",
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
