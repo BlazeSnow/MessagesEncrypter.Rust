@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-/** 主页：接收方 / 发送方 两列流程说明（与原版 HomeView 对齐），步骤按 1~5 全局编号。 */
+/** 主页：接收方 / 发送方 两列流程说明，按官网 quickstart 时间顺序编号 1~5：
+ *  1 生成私钥 → 2 分享公钥 → 3 导入公钥 → 4 加密 → 5 解密。 */
 export function HomePage() {
   const { t } = useTranslation();
 
@@ -19,7 +20,7 @@ export function HomePage() {
         <CardContent className="space-y-3 text-sm">
           <Step n={1} text={t("HomeDiagramReceiverPrivateKey.Text")} />
           <Step n={2} text={t("HomeDiagramReceiverPublicKey.Text")} />
-          <Step n={3} text={t("HomeDiagramReceiverDecrypt.Text")} />
+          <Step n={5} text={t("HomeDiagramReceiverDecrypt.Text")} />
         </CardContent>
       </Card>
       <Card>
@@ -30,8 +31,8 @@ export function HomePage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <Step n={4} text={t("HomeDiagramSenderImportKey.Text")} />
-          <Step n={5} text={t("HomeDiagramSenderEncrypt.Text")} />
+          <Step n={3} text={t("HomeDiagramSenderImportKey.Text")} />
+          <Step n={4} text={t("HomeDiagramSenderEncrypt.Text")} />
         </CardContent>
       </Card>
     </div>
