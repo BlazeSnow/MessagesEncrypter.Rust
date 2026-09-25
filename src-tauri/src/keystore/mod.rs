@@ -2,7 +2,7 @@
 //!
 //! - 表 `keys`：结构与原版完全一致，主键 (category, fingerprint)。
 //! - 表 `settings`：本版新增（原版设置存于系统 KV），小设置不引入 settings.json。
-//! - 迁移：旧 `id` 列表结构、旧 `keys.json`。
+//! - 旧形态迁移：见 [`legacy`]（旧 `id` 列表结构、旧 `keys.json`）。
 //! - 任何建表/迁移完成后重新签名。
 
 use std::path::Path;
@@ -11,6 +11,8 @@ use rusqlite::Connection;
 
 use crate::error::{internal_error, AppError, AppResult};
 use crate::integrity;
+
+pub mod legacy;
 
 pub const CATEGORY_RECIPIENT: &str = "recipient";
 pub const CATEGORY_PRIVATE: &str = "private";
@@ -38,37 +40,16 @@ pub struct KeyRecord {
     pub encrypted_private_key_pem: Option<String>,
 }
 
-const KEY_COLUMNS: &str =
+pub(crate) const KEY_COLUMNS: &str =
     "category TEXT NOT NULL, sort_order INTEGER NOT NULL, alias TEXT NOT NULL, \
      fingerprint TEXT NOT NULL, public_key_pem TEXT NULL, encrypted_private_key_pem TEXT NULL, \
      PRIMARY KEY (category, fingerprint)";
 
-/// 旧版 keys.json 条目（camelCase；KeyEntry 序列化字段）。
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacyJsonEntry {
-    alias: String,
-    fingerprint: String,
-    #[serde(default)]
-    public_key_pem: Option<String>,
-    #[serde(default)]
-    encrypted_private_key_pem: Option<String>,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacyJsonStore {
-    #[serde(default)]
-    recipient_keys: Vec<LegacyJsonEntry>,
-    #[serde(default)]
-    private_keys: Vec<LegacyJsonEntry>,
-}
-
-fn open_connection(db_path: &Path) -> AppResult<Connection> {
+pub(crate) fn open_connection(db_path: &Path) -> AppResult<Connection> {
     Connection::open(db_path).map_err(|_| internal_error())
 }
 
-fn table_columns(conn: &Connection, table: &str) -> AppResult<Vec<String>> {
+pub(crate) fn table_columns(conn: &Connection, table: &str) -> AppResult<Vec<String>> {
     let mut stmt = conn
         .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
         .map_err(|_| internal_error())?;
@@ -82,13 +63,17 @@ fn table_columns(conn: &Connection, table: &str) -> AppResult<Vec<String>> {
     Ok(columns)
 }
 
-/// 建库/建表 + 迁移；返回是否发生了迁移（含建表）。迁移后用 `key_target` 重签。
-pub fn ensure_database(db_path: &Path, key_target: &str) -> AppResult<bool> {
+/// 建库/建表 + 迁移；返回是否发生了迁移（含建表）。
+/// 本版会新增 `settings` 表，这也会改变库字节——发生任何变更后需重签，
+/// 否则迁移进来的旧签名会失配、用户收到篡改警告。
+/// `allow_sign = false`（完整性校验失败时）跳过重签，避免掩盖篡改。
+pub fn ensure_database(db_path: &Path, key_target: &str, allow_sign: bool) -> AppResult<bool> {
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent).map_err(|_| internal_error())?;
     }
     let conn = open_connection(db_path)?;
     let mut migrated = false;
+    let mut created_settings = false;
 
     let table_exists: bool = conn
         .query_row(
@@ -107,72 +92,47 @@ pub fn ensure_database(db_path: &Path, key_target: &str) -> AppResult<bool> {
 
     // 旧表结构：含自增 id 列 → 重建。
     if table_exists && table_columns(&conn, "keys")?.iter().any(|c| c == "id") {
-        conn.execute_batch(&format!(
-            "BEGIN;
-             CREATE TABLE keys_new ({KEY_COLUMNS});
-             INSERT OR IGNORE INTO keys_new (category, sort_order, alias, fingerprint, public_key_pem, encrypted_private_key_pem)
-                 SELECT category, sort_order, alias, fingerprint, public_key_pem, encrypted_private_key_pem
-                 FROM keys ORDER BY category, sort_order;
-             DROP TABLE keys;
-             ALTER TABLE keys_new RENAME TO keys;
-             COMMIT;"
-        ))
-        .map_err(|_| internal_error())?;
+        legacy::rebuild_without_id_column(&conn)?;
         migrated = true;
     }
 
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-        [],
-    )
-    .map_err(|_| internal_error())?;
+    let settings_exists: bool = conn
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='settings'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|_| internal_error())?
+        > 0;
+    if !settings_exists {
+        conn.execute(
+            "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .map_err(|_| internal_error())?;
+        created_settings = true;
+    }
 
     // 旧版 keys.json 迁移：仅当库中无密钥时执行；完成后改名 `.migrated`。
     let count: i64 = conn
         .query_row("SELECT count(*) FROM keys", [], |row| row.get(0))
         .map_err(|_| internal_error())?;
-    if count == 0 {
-        let json_path = db_path.with_file_name("keys.json");
-        if let Ok(text) = std::fs::read_to_string(&json_path) {
-            if let Ok(store) = serde_json::from_str::<LegacyJsonStore>(&text) {
-                insert_legacy_entries(&conn, CATEGORY_RECIPIENT, &store.recipient_keys)?;
-                insert_legacy_entries(&conn, CATEGORY_PRIVATE, &store.private_keys)?;
-                drop(conn);
-                let renamed = json_path.with_file_name("keys.json.migrated");
-                let _ = std::fs::rename(&json_path, &renamed);
-                integrity::sign_file(db_path, key_target, false)?;
-                return Ok(true);
-            }
+    if count == 0 && legacy::try_migrate_keys_json(&conn, db_path)? {
+        drop(conn);
+        legacy::rename_migrated_json(db_path);
+        if allow_sign {
+            integrity::sign_file(db_path, key_target, false)?;
         }
+        return Ok(true);
     }
 
-    if migrated {
-        integrity::sign_file(db_path, key_target, false)?;
+    if migrated || created_settings {
+        if allow_sign {
+            integrity::sign_file(db_path, key_target, false)?;
+        }
+        migrated = true;
     }
     Ok(migrated)
-}
-
-fn insert_legacy_entries(
-    conn: &Connection,
-    category: &str,
-    entries: &[LegacyJsonEntry],
-) -> AppResult<()> {
-    for (sort_order, entry) in entries.iter().enumerate() {
-        conn.execute(
-            "INSERT OR IGNORE INTO keys (category, sort_order, alias, fingerprint, public_key_pem, encrypted_private_key_pem)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![
-                category,
-                sort_order as i64,
-                entry.alias,
-                entry.fingerprint,
-                entry.public_key_pem,
-                entry.encrypted_private_key_pem
-            ],
-        )
-        .map_err(|_| internal_error())?;
-    }
-    Ok(())
 }
 
 pub fn list_keys(db_path: &Path, category: &str) -> AppResult<Vec<KeyRecord>> {
@@ -335,7 +295,7 @@ mod tests {
     use super::*;
 
     /// 独立签名密钥目标名，避免污染真实凭据；测试结束删除。
-    fn test_key_target(tag: &str) -> String {
+    pub(super) fn test_key_target(tag: &str) -> String {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -343,7 +303,7 @@ mod tests {
         format!("MessagesEncrypter.UnitTests.{tag}.{nanos}")
     }
 
-    fn temp_dir(tag: &str) -> std::path::PathBuf {
+    pub(super) fn temp_dir(tag: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "me-unit-{}-{tag}",
             std::time::SystemTime::now()
@@ -355,7 +315,7 @@ mod tests {
         dir
     }
 
-    fn record(category: &str, alias: &str, fingerprint: &str) -> KeyRecord {
+    pub(super) fn record(category: &str, alias: &str, fingerprint: &str) -> KeyRecord {
         KeyRecord {
             category: category.to_string(),
             alias: alias.to_string(),
@@ -374,7 +334,7 @@ mod tests {
         let dir = temp_dir("fresh");
         let db = dir.join("keys.db");
         let target = test_key_target("fresh");
-        ensure_database(&db, &target).unwrap();
+        ensure_database(&db, &target, true).unwrap();
         assert!(db.exists());
         assert!(integrity::signature_path(&db).exists());
         assert_eq!(
@@ -390,7 +350,7 @@ mod tests {
         let dir = temp_dir("roundtrip");
         let db = dir.join("keys.db");
         let target = test_key_target("roundtrip");
-        ensure_database(&db, &target).unwrap();
+        ensure_database(&db, &target, true).unwrap();
 
         assert!(insert_key(&db, &record(CATEGORY_RECIPIENT, "乙", "FP2"), 0).unwrap());
         assert!(insert_key(&db, &record(CATEGORY_RECIPIENT, "甲", "FP1"), 1).unwrap());
@@ -399,14 +359,12 @@ mod tests {
 
         let keys = list_keys(&db, CATEGORY_RECIPIENT).unwrap();
         assert_eq!(keys.len(), 2);
-        // 别名排序（不区分大小写）。
+        // 别名排序（按码点：乙 U+4E59 < 甲 U+7532）。
         assert_eq!(keys[0].alias, "乙");
         assert_eq!(keys[1].alias, "甲");
 
         assert!(get_key(&db, CATEGORY_RECIPIENT, "FP1").unwrap().is_some());
-        assert!(get_key(&db, CATEGORY_RECIPIENT, "MISSING")
-            .unwrap()
-            .is_none());
+        assert!(get_key(&db, CATEGORY_RECIPIENT, "MISSING").unwrap().is_none());
 
         // 重命名 + 删除。
         assert!(update_alias(&db, CATEGORY_RECIPIENT, "FP2", "丙").unwrap());
@@ -423,92 +381,15 @@ mod tests {
         let dir = temp_dir("settings");
         let db = dir.join("keys.db");
         let target = test_key_target("settings");
-        ensure_database(&db, &target).unwrap();
+        ensure_database(&db, &target, true).unwrap();
 
         set_setting(&db, SETTING_DISPLAY_LANGUAGE, "zh-Hans").unwrap();
         integrity::sign_file(&db, &target, false).unwrap();
         assert_eq!(
-            get_setting(&db, SETTING_DISPLAY_LANGUAGE)
-                .unwrap()
-                .as_deref(),
+            get_setting(&db, SETTING_DISPLAY_LANGUAGE).unwrap().as_deref(),
             Some("zh-Hans")
         );
         assert!(get_setting(&db, "NotAValidKey").is_err());
-
-        crate::credman::delete_integrity_key(&target).unwrap();
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn legacy_id_column_table_migrates_and_dedups() {
-        let dir = temp_dir("idcol");
-        let db = dir.join("keys.db");
-        let target = test_key_target("idcol");
-        {
-            let conn = Connection::open(&db).unwrap();
-            conn.execute_batch(
-                "CREATE TABLE keys (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    category TEXT NOT NULL,
-                    sort_order INTEGER NOT NULL,
-                    alias TEXT NOT NULL,
-                    fingerprint TEXT NOT NULL,
-                    public_key_pem TEXT NULL,
-                    encrypted_private_key_pem TEXT NULL
-                 );
-                 INSERT INTO keys (category, sort_order, alias, fingerprint) VALUES ('recipient', 0, 'A', 'F1');
-                 INSERT INTO keys (category, sort_order, alias, fingerprint) VALUES ('recipient', 1, 'B', 'F2');
-                 INSERT INTO keys (category, sort_order, alias, fingerprint) VALUES ('recipient', 2, 'C', 'F1');
-                 INSERT INTO keys (category, sort_order, alias, fingerprint) VALUES ('private', 0, 'D', 'F3');",
-            )
-            .unwrap();
-        }
-
-        ensure_database(&db, &target).unwrap();
-        let columns = table_columns(&Connection::open(&db).unwrap(), "keys").unwrap();
-        assert!(!columns.iter().any(|c| c == "id"));
-        // 重复指纹被忽略：4 行迁移后剩 3。
-        assert_eq!(list_keys(&db, CATEGORY_RECIPIENT).unwrap().len(), 2);
-        assert_eq!(list_keys(&db, CATEGORY_PRIVATE).unwrap().len(), 1);
-        assert_eq!(
-            integrity::verify_file(&db, &target).unwrap(),
-            integrity::IntegrityState::Ok
-        );
-
-        crate::credman::delete_integrity_key(&target).unwrap();
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn legacy_keys_json_migrates_and_renames() {
-        let dir = temp_dir("json");
-        let db = dir.join("keys.db");
-        let target = test_key_target("json");
-        std::fs::write(
-            dir.join("keys.json"),
-            r#"{
-              "recipientKeys": [
-                { "alias": "A", "fingerprint": "FA", "publicKeyPem": "PUB-A", "encryptedPrivateKeyPem": null }
-              ],
-              "privateKeys": [
-                { "alias": "B", "fingerprint": "FB", "publicKeyPem": "PUB-B", "encryptedPrivateKeyPem": "ENC-B" }
-              ]
-            }"#,
-        )
-        .unwrap();
-
-        ensure_database(&db, &target).unwrap();
-        assert!(dir.join("keys.json.migrated").exists());
-        assert!(!dir.join("keys.json").exists());
-        let recipient = list_keys(&db, CATEGORY_RECIPIENT).unwrap();
-        assert_eq!(recipient.len(), 1);
-        assert_eq!(recipient[0].alias, "A");
-        assert_eq!(recipient[0].public_key_pem.as_deref(), Some("PUB-A"));
-        let private = list_keys(&db, CATEGORY_PRIVATE).unwrap();
-        assert_eq!(
-            private[0].encrypted_private_key_pem.as_deref(),
-            Some("ENC-B")
-        );
 
         crate::credman::delete_integrity_key(&target).unwrap();
         std::fs::remove_dir_all(dir).unwrap();

@@ -1,6 +1,6 @@
 [package]
 name = "messagesencrypter"
-version = "2026.9.24"
+version = "2026.9.25"
 description = "MessagesEncrypter"
 authors = ["BlazeSnow"]
 edition = "2021"
@@ -39,7 +39,7 @@ zeroize = "1.9"
 thiserror = "2"
 rand = "0.8"
 pkcs8 = { version = "0.10", features = ["pem", "encryption", "std"] }
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security_Credentials"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Security_Cryptography"] }
 tauri-plugin-fs = "2.5.2"
 tauri-plugin-window-state = "2.4.1"
 

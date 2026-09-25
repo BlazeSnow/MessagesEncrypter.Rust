@@ -1,3 +1,4 @@
+mod cng;
 mod commands;
 mod credman;
 mod error;
@@ -52,9 +53,26 @@ pub fn run() {
             // 首次运行迁移旧版密钥库（含签名文件），随后建库/迁移并校验完整性。
             migration::migrate_legacy_store(&data_dir)?;
             let db_path = data_dir.join("keys.db");
-            keystore::ensure_database(&db_path, credman::INTEGRITY_KEY_TARGET_NAME)?;
-            let integrity_state =
-                integrity::verify_file(&db_path, credman::INTEGRITY_KEY_TARGET_NAME)?;
+            // 先用（可能来自旧版的）签名在未被修改的原始库上校验——篡改不会被
+            // 本版结构调整掩盖；校验通过后再做结构调整（settings 表等）并重签，
+            // 迁移用户不会收到篡改警告。
+            let integrity_state = if db_path.exists() {
+                let state =
+                    integrity::verify_file(&db_path, credman::INTEGRITY_KEY_TARGET_NAME)?;
+                keystore::ensure_database(
+                    &db_path,
+                    credman::INTEGRITY_KEY_TARGET_NAME,
+                    state == integrity::IntegrityState::Ok,
+                )?;
+                state
+            } else {
+                keystore::ensure_database(
+                    &db_path,
+                    credman::INTEGRITY_KEY_TARGET_NAME,
+                    true,
+                )?;
+                integrity::IntegrityState::Ok
+            };
 
             app.manage(AppState {
                 data_dir,
@@ -89,24 +107,24 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            commands::get_key_store_state,
-            commands::trust_key_store,
-            commands::list_keys,
-            commands::generate_key_pair,
-            commands::import_public_key,
-            commands::import_private_key,
-            commands::rename_key,
-            commands::delete_key,
-            commands::change_private_key_password,
-            commands::encrypt_message,
-            commands::decrypt_message,
-            commands::has_saved_password,
-            commands::export_key,
-            commands::get_app_settings,
-            commands::set_setting,
-            commands::get_app_version,
-            commands::get_data_dir,
-            commands::get_language_preference,
+            commands::integrity::get_key_store_state,
+            commands::integrity::trust_key_store,
+            commands::keys::list_keys,
+            commands::keys::generate_key_pair,
+            commands::keys::import_public_key,
+            commands::keys::import_private_key,
+            commands::keys::rename_key,
+            commands::keys::delete_key,
+            commands::keys::change_private_key_password,
+            commands::keys::has_saved_password,
+            commands::keys::export_key,
+            commands::crypto::encrypt_message,
+            commands::crypto::decrypt_message,
+            commands::store::get_app_settings,
+            commands::store::set_setting,
+            commands::store::get_app_version,
+            commands::store::get_data_dir,
+            commands::store::get_language_preference,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

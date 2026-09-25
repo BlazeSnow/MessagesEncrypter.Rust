@@ -18,6 +18,7 @@ import { HomePage } from "@/pages/HomePage";
 import { PrivateKeysPage } from "@/pages/PrivateKeysPage";
 import { RecipientKeysPage } from "@/pages/RecipientKeysPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { GenerationProvider } from "@/state/generation";
 import { KeysProvider, useKeys } from "@/state/keys";
 
 type PageId = "home" | "encrypt" | "decrypt" | "recipient" | "private" | "settings";
@@ -87,8 +88,10 @@ function Shell() {
 export default function App() {
   return (
     <KeysProvider>
-      <Shell />
-      <Toaster position="bottom-right" richColors />
+      <GenerationProvider>
+        <Shell />
+        <Toaster position="bottom-right" richColors />
+      </GenerationProvider>
     </KeysProvider>
   );
 }
