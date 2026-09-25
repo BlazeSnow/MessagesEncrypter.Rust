@@ -1,4 +1,4 @@
-import { Copy, Eraser, Lock } from "lucide-react";
+import { Copy, Eraser, Loader2, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -125,7 +125,11 @@ export function EncryptPage() {
           </div>
           <div className="flex gap-2">
             <Button onClick={() => void handleEncrypt()} disabled={busy}>
-              <Lock className="size-4" />
+              {busy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Lock className="size-4" />
+              )}
               {t("EncryptButton.Text")}
             </Button>
             <Button variant="outline" onClick={() => void handleCopy()} disabled={!encrypted}>

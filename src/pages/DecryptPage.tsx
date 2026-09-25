@@ -1,4 +1,4 @@
-import { ClipboardPaste, Eraser, LockKeyhole } from "lucide-react";
+import { ClipboardPaste, Eraser, Loader2, LockKeyhole } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -178,7 +178,11 @@ export function DecryptPage() {
           </div>
           <div className="flex gap-2">
             <Button onClick={() => void handleDecrypt()} disabled={busy}>
-              <LockKeyhole className="size-4" />
+              {busy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <LockKeyhole className="size-4" />
+              )}
               {t("DecryptButton.Text")}
             </Button>
             <Button variant="outline" onClick={() => void handlePaste()}>
@@ -229,6 +233,7 @@ export function DecryptPage() {
               {t("DialogCancelButtonText")}
             </Button>
             <Button onClick={() => void handleUnlock()} disabled={busy}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
               {t("DialogUnlockButtonText")}
             </Button>
           </DialogFooter>
