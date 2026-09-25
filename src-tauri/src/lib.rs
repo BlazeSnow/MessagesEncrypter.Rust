@@ -26,8 +26,11 @@ const WINDOW_STATE_FLAGS: StateFlags = StateFlags::SIZE
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // 第二实例：唤醒已有主窗口。
+            // 第二实例：唤醒已有主窗口。set_focus 对最小化的窗口不会还原，
+            // 需先还原再聚焦，否则用户感知为「二次启动没反应」。
             if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
                 let _ = window.set_focus();
             }
         }))
