@@ -313,7 +313,7 @@ export function PrivateKeysPage() {
 
       {generation ? (
         <Card size="sm">
-          <CardContent className="flex items-center gap-3 py-5">
+          <CardContent className="flex items-center gap-3 py-2.5">
             <Loader2 className="size-5 shrink-0 animate-spin text-primary" />
             <div className="min-w-0">
               <p className="text-sm font-medium">{t("KeyGeneratingTitle")}</p>
