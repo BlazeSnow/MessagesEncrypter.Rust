@@ -134,7 +134,7 @@ export function SettingsPage() {
         </CardHeader>
         <CardFooter>
           <Button variant="outline" onClick={() => void openExternal(t("RepositoryUrl"))}>
-            {t("DialogOkButtonText")}
+            {t("OpenButton.Text")}
           </Button>
         </CardFooter>
       </Card>
@@ -149,7 +149,7 @@ export function SettingsPage() {
         </CardHeader>
         <CardFooter>
           <Button variant="outline" onClick={() => void openExternal(t("WebsiteUrl"))}>
-            {t("DialogOkButtonText")}
+            {t("OpenButton.Text")}
           </Button>
         </CardFooter>
       </Card>

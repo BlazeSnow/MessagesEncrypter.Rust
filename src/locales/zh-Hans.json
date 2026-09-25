@@ -48,6 +48,7 @@
   "DialogDeleteButtonText": "删除",
   "ImportRecipientKeyButton.Text": "导入公钥",
   "OpenExportFolderButton.Text": "打开导出目录",
+"OpenButton.Text": "打开",
   "ImportRecipientKeyDialogTitle": "导入接收方公钥",
   "ImportKeyAliasBox.Header": "别名",
   "ImportKeyAliasBox.PlaceholderText": "输入别名",

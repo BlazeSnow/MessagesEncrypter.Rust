@@ -121,6 +121,10 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 
 ## 10. 开发日志
 
+### 2026-09-26（六）
+
+- 修正设置页「项目仓库 / 项目网站」按钮文案：此前误用 DialogOkButtonText（确定），新增通用键 OpenButton.Text（打开 / Open）。
+
 ### 2026-09-26（五）
 
 - 窗口几何记忆：接入官方 tauri-plugin-window-state（SIZE/POSITION/MAXIMIZED/FULLSCREEN，不含 VISIBLE）。窗口改为隐藏启动（tauri.conf visible=false）：setup 中插件已按状态文件恢复几何 → fit_main_window 钳制到当前显示器工作区（防副屏被拔后窗口甩出屏幕、尺寸超屏、压任务栏；无状态文件的首启按工作区居中）→ 再 show，用户看到的即最终几何，无默认尺寸闪窗。CloseRequested 时显式 save_window_state（不依赖应用退出事件，taskkill /F 等强杀路径除外）。

@@ -48,6 +48,7 @@
   "DialogDeleteButtonText": "Delete",
   "ImportRecipientKeyButton.Text": "Import public key",
   "OpenExportFolderButton.Text": "Open export folder",
+"OpenButton.Text": "Open",
   "ImportRecipientKeyDialogTitle": "Import recipient public key",
   "ImportKeyAliasBox.Header": "Alias",
   "ImportKeyAliasBox.PlaceholderText": "Enter an alias",
