@@ -1,5 +1,5 @@
 import { Copy, Eraser, Loader2, Lock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -28,8 +28,10 @@ export function EncryptPage() {
   const [plain, setPlain] = useState("");
   const [encrypted, setEncrypted] = useState("");
   const [busy, setBusy] = useState(false);
+  // 用户手动选择过则恢复流程不得覆盖（恢复请求与手选存在竞态）。
+  const userSelectedRef = useRef(false);
 
-  // 恢复记忆的已选公钥（删除后回退到第一项）。
+  // 恢复记忆的已选公钥（删除后回退到第一项，并把回退值写入记忆）。
   useEffect(() => {
     if (loading || selected) {
       return;
@@ -39,10 +41,14 @@ export function EncryptPage() {
         const settings = await api.getAppSettings();
         const remembered = settings.selectedRecipientFingerprint;
         const keys = await api.listKeys("recipient");
+        if (userSelectedRef.current) {
+          return;
+        }
         if (remembered && keys.some((key) => key.fingerprint === remembered)) {
           setSelected(remembered);
         } else if (keys.length > 0) {
           setSelected(keys[0].fingerprint);
+          void api.setSetting(SETTING_KEY, keys[0].fingerprint).catch(() => undefined);
         }
       } catch {
         // 设置不可用时忽略记忆，保持空选。
@@ -51,6 +57,7 @@ export function EncryptPage() {
   }, [loading, selected, recipientKeys.length]);
 
   const handleSelectChange = (fingerprint: string) => {
+    userSelectedRef.current = true;
     setSelected(fingerprint);
     void api.setSetting(SETTING_KEY, fingerprint).catch(() => undefined);
   };
