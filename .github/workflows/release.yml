@@ -34,6 +34,13 @@ jobs:
 
     - run: pnpm check:locales
 
+    - name: frontend tests
+      run: pnpm test
+
+    - name: backend tests
+      working-directory: src-tauri
+      run: cargo test --release
+
     - run: pnpm build:web
 
     - name: Get version

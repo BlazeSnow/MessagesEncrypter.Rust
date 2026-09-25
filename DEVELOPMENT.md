@@ -121,6 +121,14 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 
 ## 10. 开发日志
 
+### 2026-09-26（十七）
+
+- 测试体系补全（后端 40 项 + 前端 18 项，全部通过）：
+  - 后端新增：迁移落盘（复制 db+签名 / keys.json 回退 / 已有库与无旧目录跳过，重构出可注入的 `migrate_legacy_store_from`）、凭据管理器读写删除回环（独立目标名，中文/Emoji 密码）、命令层（导出文件名净化、别名与 category 校验）。
+  - 前端从零搭建：vitest + jsdom + @testing-library（对齐参考项目技术栈）；`pnpm test` / `test:watch`。环境垫片：jsdom 缺 PointerEvent 与 scrollIntoView（Radix Select 依赖）；vitest globals 关闭时 RTL 自动 cleanup 不生效，setup 中手动注册。Radix Select 交互用键盘驱动（Enter 展开 → 方向键 → Enter 提交），鼠标点击在 jsdom 无法展开属已知限制。
+  - 覆盖：错误码提取、语言偏好解析（zh-Hans/CN/SG 中文、zh-TW 英语）、首页五步骤渲染与跳转（2 号不可点）、密钥卡片展示与更多菜单、加密页恢复记忆/加密调用/切换写记忆、完整性弹窗双正文与重签回调/退出销毁。
+  - 发布流水线（tag 触发）新增前端 `pnpm test` 与后端 `cargo test --release` 门禁。
+
 ### 2026-09-26（十六）
 
 - 深色模式补全（CSS 令牌此前已跟随 prefers-color-scheme 并实测正常，本次补齐三处缺口）：
