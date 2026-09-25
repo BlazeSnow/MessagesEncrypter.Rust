@@ -114,7 +114,8 @@ export function EncryptPage() {
               <SelectContent>
                 {recipientKeys.map((key) => (
                   <SelectItem key={key.fingerprint} value={key.fingerprint}>
-                    {key.alias} ({key.fingerprint})
+                    {key.alias}{" "}
+                    <span className="text-muted-foreground">({key.fingerprint})</span>
                   </SelectItem>
                 ))}
               </SelectContent>
