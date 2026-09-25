@@ -15,7 +15,7 @@ vi.mock("@/state/keys", () => ({
   }),
 }));
 
-const setSetting = vi.fn(async () => undefined);
+const setSetting = vi.fn(async (_key: string, _value: string) => undefined);
 const encryptMessage = vi.fn(async (_fp: string, _plain: string) => "ENCRYPTED-PACKAGE");
 
 vi.mock("@/lib/api", () => ({
@@ -27,8 +27,8 @@ vi.mock("@/lib/api", () => ({
       selectedPrivateFingerprint: null,
     })),
     listKeys: vi.fn(async () => KEYS),
-    setSetting: (...args: unknown[]) => setSetting(...(args as [])),
-    encryptMessage: (...args: unknown[]) => encryptMessage(...(args as [])),
+    setSetting: (key: string, value: string) => setSetting(key, value),
+    encryptMessage: (fp: string, plain: string) => encryptMessage(fp, plain),
   },
   errorCodeOf: () => "ErrorInternal",
   RSA_KEY_SIZES: [2048, 3072, 4096, 8192],
