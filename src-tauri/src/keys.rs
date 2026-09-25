@@ -104,6 +104,16 @@ pub fn decrypt_private_key_pem(enc_pem: &str, password: &str) -> AppResult<RsaPr
     RsaPrivateKey::from_pkcs8_der(der.as_bytes()).map_err(|_| invalid())
 }
 
+/// 生成 RSA 私钥：Windows 优先 CNG（与旧版 .NET 同源，8192 位秒级），
+/// 失败回退纯 Rust 实现（8192 位可能耗时数分钟）。
+fn generate_private_key(key_size_bits: usize) -> AppResult<RsaPrivateKey> {
+    #[cfg(windows)]
+    if let Ok(key) = crate::cng::generate_components(key_size_bits) {
+        return Ok(key);
+    }
+    RsaPrivateKey::new(&mut OsRng, key_size_bits).map_err(|_| internal_error())
+}
+
 /// 生成密钥对。
 pub fn generate_key_pair(password: &str, key_size_bits: usize) -> AppResult<KeyPairMaterial> {
     if password.trim().is_empty() {
@@ -112,8 +122,7 @@ pub fn generate_key_pair(password: &str, key_size_bits: usize) -> AppResult<KeyP
     if !SUPPORTED_RSA_KEY_SIZES_BITS.contains(&key_size_bits) {
         return Err(error(ERROR_UNSUPPORTED_RSA_KEY_SIZE));
     }
-    let private_key =
-        RsaPrivateKey::new(&mut OsRng, key_size_bits).map_err(|_| internal_error())?;
+    let private_key = generate_private_key(key_size_bits)?;
     let public_key = private_key.to_public_key();
     let public_key_pem = public_key
         .to_public_key_pem(LineEnding::LF)
@@ -413,5 +422,33 @@ mod tests {
             estimate_private_key_bits(&material.encrypted_private_key_pem),
             Some(2048)
         );
+    }
+}
+
+#[cfg(test)]
+mod bench {
+    use super::*;
+    use std::time::Instant;
+
+    /// 8192 位生成计时（release 下手动运行：cargo test bench_8192 -- --ignored --nocapture）。
+    #[test]
+    #[ignore = "manual benchmark"]
+    fn bench_8192_keygen() {
+        for i in 0..3 {
+            let t = Instant::now();
+            let k = RsaPrivateKey::new(&mut OsRng, 8192).expect("keygen");
+            let secs = t.elapsed().as_secs_f32();
+            println!("8192 keygen #{}: {:.2}s (bits={})", i + 1, secs, k.n().bits());
+        }
+    }
+
+    #[test]
+    #[ignore = "manual benchmark"]
+    fn bench_4096_keygen() {
+        for i in 0..3 {
+            let t = Instant::now();
+            RsaPrivateKey::new(&mut OsRng, 4096).expect("keygen");
+            println!("4096 keygen #{}: {:.2}s", i + 1, t.elapsed().as_secs_f32());
+        }
     }
 }

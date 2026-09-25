@@ -1,3 +1,4 @@
+mod cng;
 mod commands;
 mod credman;
 mod error;
