@@ -7,12 +7,20 @@ mod keystore;
 mod migration;
 mod protocol_v1;
 mod state;
+mod window;
 
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use state::AppState;
 use tauri::Manager;
+use tauri_plugin_window_state::StateFlags;
+
+/// 参与保存/恢复的窗口状态：几何 + 最大化 + 全屏；不含 VISIBLE（显隐由启动流程控制）。
+const WINDOW_STATE_FLAGS: StateFlags = StateFlags::SIZE
+    .union(StateFlags::POSITION)
+    .union(StateFlags::MAXIMIZED)
+    .union(StateFlags::FULLSCREEN);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,6 +31,13 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        // 保存并恢复用户调整的窗口几何；窗口默认隐藏（tauri.conf visible=false），
+        // 由 setup 完成恢复与钳制后再显示，避免按默认几何闪窗。
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(WINDOW_STATE_FLAGS)
+                .build(),
+        )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
@@ -42,7 +57,25 @@ pub fn run() {
                 data_dir,
                 integrity: Arc::new(Mutex::new(integrity_state)),
             });
+
+            // 几何已由插件恢复（无状态则用默认值）：钳制到工作区后显示，
+            // 期间窗口一直不可见，用户看到的即最终位置与尺寸。
+            window::fit_main_window(app.handle());
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // 关闭前把用户调整的几何写盘（插件自动保存依赖应用退出事件，
+            // 显式保存保证任何退出路径都有最新值）。
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if window.label() == "main" {
+                    use tauri_plugin_window_state::AppHandleExt as _;
+                    let _ = window.app_handle().save_window_state(WINDOW_STATE_FLAGS);
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_key_store_state,

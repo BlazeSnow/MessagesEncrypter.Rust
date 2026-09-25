@@ -121,6 +121,12 @@ AGENTS.md 要求开发过程中处理终端 GBK 与 UTF-8 的关系。约定：
 
 ## 10. 开发日志
 
+### 2026-09-26（五）
+
+- 窗口几何记忆：接入官方 tauri-plugin-window-state（SIZE/POSITION/MAXIMIZED/FULLSCREEN，不含 VISIBLE）。窗口改为隐藏启动（tauri.conf visible=false）：setup 中插件已按状态文件恢复几何 → fit_main_window 钳制到当前显示器工作区（防副屏被拔后窗口甩出屏幕、尺寸超屏、压任务栏；无状态文件的首启按工作区居中）→ 再 show，用户看到的即最终几何，无默认尺寸闪窗。CloseRequested 时显式 save_window_state（不依赖应用退出事件，taskkill /F 等强杀路径除外）。
+- 已验证：首轮启动→优雅关闭→状态文件生成（1350x950@(96,23) 物理像素）；重启后经 Win32 GetWindowRect 实测窗口落在保存位置。
+- tauri.conf 移除 center（与恢复逻辑冲突，首启居中由 fit_main_window 按工作区计算）。
+
 ### 2026-09-26（四）
 
 - 修复「打开导出目录」报「发生内部错误」：根因是 `opener:allow-open-path` 权限只启用 open_path 命令，**scope 为空时 tauri fs scope 拒绝一切路径**（ForbiddenPath）——读插件源码确认 `is_path_allowed` 的空 allow 列表语义。capability 中为该权限内联授予 `allow: [{ path: "**" }]`（本应用仅本地运行，路径任意——用户可通过目录对话框选择任意位置），重建后 ACL 编译产物已验证。openExportFolder 失败时同步输出真实错误到控制台，便于以后诊断。
