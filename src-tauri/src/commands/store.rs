@@ -69,3 +69,29 @@ pub fn get_app_version(app: AppHandle) -> String {
 pub fn get_data_dir(state: State<'_, AppState>) -> String {
     state.data_dir.display().to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_dto_serializes_camel_case() {
+        let json = serde_json::to_value(AppSettingsDto {
+            export_folder: Some("D:/export".to_string()),
+            display_language: "zh-Hans".to_string(),
+            selected_recipient_fingerprint: Some("FP-R".to_string()),
+            selected_private_fingerprint: None,
+        })
+        .unwrap();
+        for key in [
+            "exportFolder",
+            "displayLanguage",
+            "selectedRecipientFingerprint",
+            "selectedPrivateFingerprint",
+        ] {
+            assert!(json.get(key).is_some(), "缺少字段 {key}");
+        }
+        assert_eq!(json["displayLanguage"], "zh-Hans");
+        assert!(json["selectedPrivateFingerprint"].is_null());
+    }
+}

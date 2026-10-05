@@ -94,3 +94,68 @@ pub(super) fn validate_category(category: &str) -> AppResult<()> {
         _ => Err(internal_error()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dto_serializes_camel_case_for_frontend() {
+        // 前端 KeyEntry 接口按 camelCase 读取，字段名是对外契约。
+        let record = KeyRecord {
+            category: CATEGORY_PRIVATE.to_string(),
+            alias: "别名".to_string(),
+            fingerprint: "FP1".to_string(),
+            public_key_pem: Some("PUB".to_string()),
+            encrypted_private_key_pem: Some("ENC".to_string()),
+        };
+        let json = serde_json::to_value(dto_of(record)).unwrap();
+        for key in [
+            "category",
+            "alias",
+            "fingerprint",
+            "publicKeyPem",
+            "encryptedPrivateKeyPem",
+            "keyType",
+        ] {
+            assert!(json.get(key).is_some(), "缺少字段 {key}");
+        }
+        assert_eq!(json["publicKeyPem"], "PUB");
+        assert_eq!(json["encryptedPrivateKeyPem"], "ENC");
+        assert_eq!(json["category"], CATEGORY_PRIVATE);
+    }
+
+    #[test]
+    fn key_type_empty_without_pem() {
+        let record = KeyRecord {
+            category: CATEGORY_RECIPIENT.to_string(),
+            alias: "a".to_string(),
+            fingerprint: "FP1".to_string(),
+            public_key_pem: None,
+            encrypted_private_key_pem: None,
+        };
+        assert_eq!(key_type_of(&record), "");
+    }
+
+    #[test]
+    fn key_type_reports_generated_rsa_bits() {
+        // 私钥按加密 PEM 估算位数，公钥按公钥 PEM 解析位数。
+        let material = key_mgmt::generate_key_pair("test-password", 2048).unwrap();
+        let private_record = KeyRecord {
+            category: CATEGORY_PRIVATE.to_string(),
+            alias: "a".to_string(),
+            fingerprint: material.fingerprint.clone(),
+            public_key_pem: None,
+            encrypted_private_key_pem: Some(material.encrypted_private_key_pem.clone()),
+        };
+        let recipient_record = KeyRecord {
+            category: CATEGORY_RECIPIENT.to_string(),
+            alias: "a".to_string(),
+            fingerprint: material.fingerprint.clone(),
+            public_key_pem: Some(material.public_key_pem.clone()),
+            encrypted_private_key_pem: None,
+        };
+        assert_eq!(key_type_of(&private_record), "RSA2048");
+        assert_eq!(key_type_of(&recipient_record), "RSA2048");
+    }
+}

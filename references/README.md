@@ -4,7 +4,7 @@
 
 - 资料来源：原 WinUI 3 版本源码与官方文档站 <https://messages.blazesnow.com/>。
 - 文中出现的文件路径均为原项目内的相对路径，不指向本机任何绝对位置。
-- 这些文档描述的是**原版行为**；重构版与之偏离时，应在对应文档追加「Tauri 2 迁移注意」小节并在 `DEVELOPMENT.md` 开发日志记录决策，而不是直接删改兼容性事实。
+- 这些文档描述的是**原版行为**；重构版与之偏离时，应在对应文档追加「Tauri 2 迁移注意」小节并在 [implementation.md](./implementation.md) 记录决策，而不是直接删改兼容性事实。
 
 ## 索引
 
@@ -18,7 +18,7 @@
 | [i18n.md](./i18n.md) | 双语组织、键命名规律、一致性校验规则 | 规范沿用 |
 | [testing-checklist.md](./testing-checklist.md) | 原版测试覆盖清单 + 重构兼容验收清单 | 测试设计参照 |
 | [release.md](./release.md) | MSIX/Store 发布、版本号规则、产品身份 | 发布流程参照 |
-| [implementation.md](./implementation.md) | **Tauri 2 实现记录与决策**（架构、数据、决策日志、环境备忘） | 重构版细节 |
+| [implementation.md](./implementation.md) | **Tauri 2 实现记录与决策**（架构、数据、关键决策、环境备忘） | 重构版细节 |
 
 ## 重构总原则（速览）
 

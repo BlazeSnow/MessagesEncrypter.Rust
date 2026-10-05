@@ -3,7 +3,7 @@
 MessagesEncrypter（Tauri 2 重构版）的开发索引。**本文件只作索引与速查，详细规范与实现记录全部在 [references/](./references/README.md)。**
 
 - 根目录 `AGENTS.md` 是最高优先级约束，禁止修改；与本文件冲突时以 AGENTS.md 为准。
-- **约定：每完成一项功能，在 §6 开发日志追加一行摘要，细节写入 [references/implementation.md](./references/implementation.md)。**
+- **约定：每完成一项功能，细节与决策写入 [references/implementation.md](./references/implementation.md)；编辑历史以 git 提交信息为准，不再维护开发日志。**
 
 ## 1. 项目定位
 
@@ -72,10 +72,4 @@ version.ps1 / tag.ps1 # 版本同步 / 打 tag 触发发布
 | M5 | 双语 + 语言切换（即时生效） | ✅ |
 | M6 | 设置页、单实例、窗口记忆、msixbundle 打包 | ✅ |
 | M7 | 旧数据迁移与兼容验收 | ✅（真机旧版数据待实测） |
-| 后续 | 测试体系（cargo 40 + vitest 18）、深色模式、首页导航 | ✅ |
-
-## 7. 开发日志（一行式，细节见 [references/implementation.md](./references/implementation.md)）
-
-- 2026-09-26：文件拆分（commands/ 与 keystore/ 目录化、前端对话框组件化，全部源文件 ≤400 行）；8192 位生成改走 Windows CNG（rsa 纯实现数分钟不可用，CNG 端到端实测约 5s，与旧版同源）；生成密钥对进度卡提升为全局状态（切页不丢、防并发生成，前端 20 项）；进度卡内边距收紧（100px→80px）；私钥管理页「生成密钥」改称「生成密钥对」（按钮与对话框标题）；旧版数据迁移适配验证（签名 BOM 兼容 + 首启动重签时序，真机端到端通过）；仓库链接修正；测试体系补全（cargo 40 + vitest 18 + 流水线门禁）；深色模式补全；首页步骤可点击导航与序号修正；密钥下拉指纹浅色；去掉加解密页外层卡片；单实例唤醒补强；打开导出目录 scope 修复；导入弹窗布局修复；加解密按钮加载动画；私钥生成后台化；私钥菜单补齐公钥操作与右键菜单；UI 图标语义重排；msixbundle 打包流水线落地；修复 CI 测试门禁的 mock 缺导出（IntegrityDialog errorCodeOf）与 vitest __dirname 弃用告警。
-- 2026-09-25：互操作验证四方向全绿；后端核心（协议/密钥/密钥库/完整性/迁移）；脚手架。
-- 2026-09-24：DEVELOPMENT.md 与 references/ 文档建立。
+| 后续 | 测试体系（cargo 54 + vitest 50）、深色模式、首页导航 | ✅ |
