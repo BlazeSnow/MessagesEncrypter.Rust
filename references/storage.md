@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS keys (
 
 ## 7. Tauri 2 迁移注意
 
-- **数据目录**：若沿用同一 MSIX Identity（Name + Publisher，见 [release.md](./release.md) §1），包家族名不变，LocalState 路径不变，旧 `keys.db` 可原地读取；若改变身份，则需实现「首启动从旧目录导入」。→ 决策确定后记录到 `DEVELOPMENT.md` 开发日志。
+- **数据目录**：若沿用同一 MSIX Identity（Name + Publisher，见 [release.md](./release.md) §1），包家族名不变，LocalState 路径不变，旧 `keys.db` 可原地读取；若改变身份，则需实现「首启动从旧目录导入」。→ 决策确定后记录到 [implementation.md](./implementation.md)。
 - SQLite 用 `rusqlite`（bundled）；保持表结构与迁移逻辑等价（含旧 `id` 列表与 `keys.json` 迁移），以便无缝读取。
 - 完整性方案需决策：继续 HMAC 签名（Rust 侧经 `windows` crate 等价访问凭据管理器）或改用其他保护（如 DPAPI）。若更换方案，必须能识别旧库并平滑过渡，不能把旧库一律判为「篡改」。
 - 记住的密码：原版在凭据管理器、按指纹索引；重构版若改用其他机制，指纹算法一致是索引可用的前提。
