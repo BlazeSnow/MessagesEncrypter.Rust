@@ -18,7 +18,7 @@
 | [i18n.md](./i18n.md) | 双语组织、键命名规律、一致性校验规则 | 规范沿用 |
 | [testing-checklist.md](./testing-checklist.md) | 原版测试覆盖清单 + 重构兼容验收清单 | 测试设计参照 |
 | [release.md](./release.md) | MSIX/Store 发布、版本号规则、产品身份 | 发布流程参照 |
-| [implementation.md](./implementation.md) | **Tauri 2 实现记录与决策**（架构、数据、决策日志、环境备忘） | 重构版细节 |
+| [implementation.md](./implementation.md) | **Tauri 2 实现记录与决策**（架构、数据、关键决策、环境备忘） | 重构版细节 |
 
 ## 重构总原则（速览）
 
