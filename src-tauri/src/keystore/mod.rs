@@ -394,4 +394,63 @@ mod tests {
         crate::credman::delete_integrity_key(&target).unwrap();
         std::fs::remove_dir_all(dir).unwrap();
     }
+
+    #[test]
+    fn categories_are_isolated_and_private_key_update_visible() {
+        let dir = temp_dir("categories");
+        let db = dir.join("keys.db");
+        let target = test_key_target("categories");
+        ensure_database(&db, &target, true).unwrap();
+
+        insert_key(&db, &record(CATEGORY_RECIPIENT, "对方", "FP-R"), 0).unwrap();
+        insert_key(&db, &record(CATEGORY_PRIVATE, "自己", "FP-P"), 0).unwrap();
+        integrity::sign_file(&db, &target, false).unwrap();
+
+        // 类别互不可见（加解密按 category+fingerprint 定位）。
+        assert_eq!(list_keys(&db, CATEGORY_RECIPIENT).unwrap().len(), 1);
+        assert_eq!(list_keys(&db, CATEGORY_PRIVATE).unwrap().len(), 1);
+        assert!(get_key(&db, CATEGORY_RECIPIENT, "FP-P").unwrap().is_none());
+        assert!(get_key(&db, CATEGORY_PRIVATE, "FP-R").unwrap().is_none());
+
+        // 改密流程写入新的加密私钥 PEM。
+        update_encrypted_private_key(&db, CATEGORY_PRIVATE, "FP-P", "NEW-ENC-PEM").unwrap();
+        let private_key = get_key(&db, CATEGORY_PRIVATE, "FP-P").unwrap().unwrap();
+        assert_eq!(private_key.encrypted_private_key_pem.as_deref(), Some("NEW-ENC-PEM"));
+
+        // 目标行不存在时重命名返回 false（命令层据此报「密钥不存在」）。
+        assert!(!update_alias(&db, CATEGORY_PRIVATE, "MISSING", "新名").unwrap());
+
+        crate::credman::delete_integrity_key(&target).unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn get_setting_returns_none_for_unset_key() {
+        let dir = temp_dir("unset");
+        let db = dir.join("keys.db");
+        let target = test_key_target("unset");
+        ensure_database(&db, &target, true).unwrap();
+
+        assert!(get_setting(&db, SETTING_EXPORT_FOLDER_PATH).unwrap().is_none());
+
+        crate::credman::delete_integrity_key(&target).unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn ensure_database_is_idempotent_without_changes() {
+        let dir = temp_dir("idempotent");
+        let db = dir.join("keys.db");
+        let target = test_key_target("idempotent");
+        assert!(ensure_database(&db, &target, true).unwrap());
+        // 第二次调用不应有任何建表/迁移（否则每次启动都会重签）。
+        assert!(!ensure_database(&db, &target, true).unwrap());
+        assert_eq!(
+            integrity::verify_file(&db, &target).unwrap(),
+            integrity::IntegrityState::Ok
+        );
+
+        crate::credman::delete_integrity_key(&target).unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

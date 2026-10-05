@@ -41,3 +41,30 @@ pub type AppResult<T> = Result<T, AppError>;
 pub fn internal_error() -> AppError {
     AppError::new("ErrorInternal")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_shows_stable_code() {
+        assert_eq!(
+            AppError::new("ErrorPasswordRequired").to_string(),
+            "ErrorPasswordRequired"
+        );
+    }
+
+    #[test]
+    fn serializes_to_code_wire_format() {
+        // 前端从 invoke rejection 中读取 { code } 字段，序列化形状是对外契约。
+        assert_eq!(
+            serde_json::to_string(&AppError::new("ErrorPasswordRequired")).unwrap(),
+            r#"{"code":"ErrorPasswordRequired"}"#
+        );
+    }
+
+    #[test]
+    fn internal_error_uses_internal_code() {
+        assert_eq!(internal_error().code, "ErrorInternal");
+    }
+}

@@ -25,3 +25,44 @@ impl AppState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state_with(integrity: IntegrityState) -> AppState {
+        AppState {
+            data_dir: std::path::PathBuf::from("app-data"),
+            integrity: Arc::new(Mutex::new(integrity)),
+        }
+    }
+
+    #[test]
+    fn db_path_is_keys_db_under_data_dir() {
+        assert_eq!(
+            state_with(IntegrityState::Ok).db_path(),
+            std::path::PathBuf::from("app-data").join("keys.db")
+        );
+    }
+
+    #[test]
+    fn healthy_store_allows_ok_and_maps_integrity_error_codes() {
+        state_with(IntegrityState::Ok)
+            .require_healthy_store()
+            .unwrap();
+        assert_eq!(
+            state_with(IntegrityState::SignatureMissing)
+                .require_healthy_store()
+                .unwrap_err()
+                .code,
+            "ErrorKeyStoreIntegrityMissing"
+        );
+        assert_eq!(
+            state_with(IntegrityState::Invalid)
+                .require_healthy_store()
+                .unwrap_err()
+                .code,
+            "ErrorKeyStoreIntegrityInvalid"
+        );
+    }
+}
