@@ -36,6 +36,10 @@
 
 ## 3. 决策记录（按日期）
 
+### 2026-10-05
+1. **前后端依赖例行升级**：后端 `cargo update`（tauri 2.12.1、wry 0.57、tao 0.37、windows-rs 0.62、brotli 9 等，Cargo.toml 约束未动），前端 React 19.3、vite 8.3.2、vitest 5.0.3、lucide-react 1.52、`@tauri-apps/api` 与 cli 2.12.1；六个 tauri 插件 crate 随 update 升至与 JS 侧一致（dialog 2.8.1 / fs 2.6.0 / opener 2.7.0 / clipboard-manager 2.4.1 / single-instance 2.5.2 / window-state 2.5.0）。门禁四项全绿（cargo test 42 / vitest 20 / check:locales / release 构建）+ release exe 启动冒烟通过；版本号三处同步 2026.10.5。
+2. **vite 8.3 新增 INEFFECTIVE_DYNAMIC_IMPORT 提示**（提示级，不影响产物）：`keyFiles.ts` 顶部静态导入 `@tauri-apps/api/path` 与 `plugin-opener`，而 `keyFiles.ts` 内部与 `SettingsPage.tsx` 又动态导入同模块，动态导入失去分包意义。暂保留现状，如需消除把 keyFiles.ts 顶部两行改为动态导入即可。
+
 ### 2026-09-26
 0. **8192 位生成改走 Windows CNG**：rsa crate 纯软件实现 8192 位生成实测数分钟不可用（用户终止基准），CNG 实测 2~13s——旧版 WinUI（.NET→CNG）正是此速度。新增 cng 模块：BCrypt 生成 + 导出 BCRYPT_RSAFULLPRIVATE_BLOB（布局 e|n|p|q|dp|dq|qinv|d，块身份鉴定确认）→ RsaPrivateKey::from_components + validate + OAEP 自检；Windows 优先 CNG、失败回退 rsa。端到端实测 8192 约 5s。调试中曾误判布局（d 偏移算术错误），靠「素数对穷举 + validate」块鉴定纠正——教训：怀疑数据布局时先做块身份鉴定，勿凭偏移算术下结论。
 0. **旧版数据迁移适配**（v2026.9.24.0 已发布至商店 beta 测试组，本修复随 v2026.9.25.0 发布；后续商店版本必须高于 2026.9.24.0）：用旧版真实生成的 keys.db/签名端到端验证，修复两处必然触发篡改警告的问题——(a) 旧版（C#）签名文件带 UTF-8 BOM，verify 需显式剥离；(b) 首启动顺序改为「先校验原始库 → 再加 settings 表等结构调整（仅校验通过时重签）→ 完成」，结构调整改变库字节后必须重签，否则迁移用户必收篡改警告。本机验证测试 `legacy_machine_store_migrates_without_tamper_warning`（#[ignore]，依赖真实 LocalState + 凭据）全流程通过：原始签名校验 Ok → 调整 + 重签 Ok → 幂等 Ok → 5 把密钥保留；新旧版凭据密钥同名共用，旧版随后打开亦不受影响。

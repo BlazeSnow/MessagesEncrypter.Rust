@@ -1,6 +1,6 @@
 [package]
 name = "messagesencrypter"
-version = "2026.9.25"
+version = "2026.10.5"
 description = "MessagesEncrypter"
 authors = ["BlazeSnow"]
 edition = "2021"
