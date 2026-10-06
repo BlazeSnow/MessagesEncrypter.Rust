@@ -4,13 +4,16 @@ import { toast } from "sonner";
 
 import { exportKey, openExportFolder, pickKeyFile } from "@/lib/keyFiles";
 
-const exportKeyBackend = vi.fn(async (_c: string, _f: string, _p?: string) => "C:/out/key.pub");
+const exportKeyBackend = vi.fn(
+  async (_c: string, _f: string, _p?: string, _o?: boolean) => "C:/out/key.pub",
+);
 const getAppSettings = vi.fn(async () => ({
   exportFolder: savedFolder.folder,
   displayLanguage: "zh-Hans",
   selectedRecipientFingerprint: null,
   selectedPrivateFingerprint: null,
 }));
+const askDialogMock = vi.fn(async (_message?: unknown, _options?: unknown) => true);
 
 const savedFolder = { folder: null as string | null };
 const picked = { path: "C:/keys/alias.pub" as string | null };
@@ -18,11 +21,18 @@ const fileContent = { text: "PEM-CONTENT" };
 
 vi.mock("@/lib/api", () => ({
   api: {
-    exportKey: (category: string, fingerprint: string, part?: string) =>
-      exportKeyBackend(category, fingerprint, part),
+    exportKey: (category: string, fingerprint: string, part?: string, overwrite?: boolean) =>
+      exportKeyBackend(category, fingerprint, part, overwrite),
     getAppSettings: () => getAppSettings(),
   },
-  errorCodeOf: () => "ErrorInternal",
+  errorCodeOf: (error: unknown) => {
+    const code = (error as { code?: unknown } | null)?.code;
+    return typeof code === "string" && code ? code : "ErrorInternal";
+  },
+  errorDetailOf: (error: unknown) => {
+    const detail = (error as { detail?: unknown } | null)?.detail;
+    return typeof detail === "string" && detail ? detail : null;
+  },
 }));
 
 vi.mock("@tauri-apps/api/path", () => ({
@@ -32,6 +42,7 @@ vi.mock("@tauri-apps/api/path", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: (args?: unknown) => openDialogMock(args),
+  ask: (message?: unknown, options?: unknown) => askDialogMock(message, options),
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
@@ -106,7 +117,7 @@ describe("keyFiles", () => {
   it("exportKey 成功时提示密钥已导出", async () => {
     await exportKey("recipient", "FP-R", "public");
 
-    expect(exportKeyBackend).toHaveBeenCalledWith("recipient", "FP-R", "public");
+    expect(exportKeyBackend).toHaveBeenCalledWith("recipient", "FP-R", "public", undefined);
     expect(toast.success).toHaveBeenCalledWith("密钥已导出。");
   });
 
@@ -114,6 +125,52 @@ describe("keyFiles", () => {
     exportKeyBackend.mockRejectedValueOnce({ code: "ErrorExportFailed" });
 
     await expect(exportKey("private", "FP-P")).resolves.toBeUndefined();
+    expect(toast.error).toHaveBeenCalledWith("导出密钥失败。");
+  });
+
+  it("exportKey 同名文件确认覆盖后带 overwrite 重试并提示成功", async () => {
+    exportKeyBackend.mockRejectedValueOnce({
+      code: "ErrorExportFileExists",
+      detail: "alias.pub",
+    });
+
+    await exportKey("recipient", "FP-R", "public");
+
+    expect(askDialogMock).toHaveBeenCalledWith(
+      "“alias.pub”已存在于导出目录中，是否覆盖？",
+      expect.objectContaining({
+        title: "覆盖已有文件",
+        okLabel: "覆盖",
+        cancelLabel: "取消",
+      }),
+    );
+    expect(exportKeyBackend).toHaveBeenCalledTimes(2);
+    expect(exportKeyBackend).toHaveBeenLastCalledWith("recipient", "FP-R", "public", true);
+    expect(toast.success).toHaveBeenCalledWith("密钥已导出。");
+  });
+
+  it("exportKey 同名文件取消覆盖时不重试也不提示", async () => {
+    exportKeyBackend.mockRejectedValueOnce({
+      code: "ErrorExportFileExists",
+      detail: "alias.pub",
+    });
+    askDialogMock.mockResolvedValueOnce(false);
+
+    await exportKey("recipient", "FP-R");
+
+    expect(exportKeyBackend).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("exportKey 覆盖重试失败时提示导出失败", async () => {
+    exportKeyBackend
+      .mockRejectedValueOnce({ code: "ErrorExportFileExists", detail: "alias.pub" })
+      .mockRejectedValueOnce({ code: "ErrorExportFailed" });
+
+    await exportKey("private", "FP-P");
+
+    expect(exportKeyBackend).toHaveBeenCalledTimes(2);
     expect(toast.error).toHaveBeenCalledWith("导出密钥失败。");
   });
 

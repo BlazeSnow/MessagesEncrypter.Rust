@@ -55,6 +55,7 @@
 ### 3.4 UI 交互
 
 - **密钥选择记忆**：按指纹写入 settings；恢复请求与手选存在竞态，用户手选后恢复不得覆盖；自动选中第一把也写入记忆。
+- **导出同名文件确认**：目标已有同名文件时 `export_key` 返回 `ErrorExportFileExists`（`AppError.detail` 携带文件名；`detail` 缺省不序列化，其余错误线格式不变），前端系统级 `ask()` 弹窗（覆盖/取消）确认后带 `overwrite = true` 重试，取消则静默返回。
 - **私钥生成后台化**：对话框即关、列表进度卡；生成状态提升为全局 GenerationProvider（切页不丢、防并发生成），仅禁用生成按钮。
 - **私钥菜单补齐公钥操作**：`export_key` 增加 `part` 参数，私钥条目可导出对应公钥；KeyCard 右键与「更多」下拉共用动作集。
 - **图标语义**：接收方 KeyRound、私钥 ShieldKeyhole、解密 LockOpen、生成 CirclePlus、导入 Import（全局闭锁=加密/开锁=解密）。

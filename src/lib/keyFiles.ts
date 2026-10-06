@@ -1,7 +1,7 @@
 import { basename } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
 
-import { api } from "@/lib/api";
+import { api, errorCodeOf, errorDetailOf } from "@/lib/api";
 import type { KeyCategory } from "@/lib/api";
 import { showStatusToast } from "@/lib/status";
 import { t } from "i18next";
@@ -32,7 +32,8 @@ export async function pickKeyFile(kind: "public" | "private"): Promise<PickedKey
   return { fileName: stem, content };
 }
 
-/** 导出密钥并提示（后端已在资源管理器中定位文件）。 */
+/** 导出密钥并提示（后端已在资源管理器中定位文件）；
+ *  目标已有同名文件时先弹窗确认，确认后覆盖重试。 */
 export async function exportKey(
   category: KeyCategory,
   fingerprint: string,
@@ -42,8 +43,37 @@ export async function exportKey(
     await api.exportKey(category, fingerprint, part);
     showStatusToast("StatusKeyExported");
   } catch (error) {
+    if (errorCodeOf(error) === "ErrorExportFileExists") {
+      await confirmOverwriteAndExport(category, fingerprint, part, errorDetailOf(error) ?? "");
+      return;
+    }
     toast.error(t("ErrorExportFailed"));
+  }
+}
+
+/** 同名文件确认弹窗（系统级对话框）；取消则静默返回。 */
+async function confirmOverwriteAndExport(
+  category: KeyCategory,
+  fingerprint: string,
+  part: "public" | "private" | undefined,
+  fileName: string,
+) {
+  const { ask } = await import("@tauri-apps/plugin-dialog");
+  const confirmed = await ask(t("ExportOverwriteDialogContent", { 0: fileName }), {
+    title: t("ExportOverwriteDialogTitle"),
+    kind: "warning",
+    okLabel: t("DialogOverwriteButtonText"),
+    cancelLabel: t("DialogCancelButtonText"),
+  });
+  if (!confirmed) {
+    return;
+  }
+  try {
+    await api.exportKey(category, fingerprint, part, true);
+    showStatusToast("StatusKeyExported");
+  } catch (error) {
     void error;
+    toast.error(t("ErrorExportFailed"));
   }
 }
 

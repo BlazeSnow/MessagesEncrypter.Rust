@@ -4,15 +4,25 @@ use serde::Serialize;
 
 /// 应用统一错误：`code` 为稳定错误码（沿用原版 `ErrorXxx` 命名），
 /// 由前端映射为本地化文案；后端不返回堆栈等内部信息。
+/// `detail` 为可选补充信息（如冲突文件名），序列化时缺省不出现。
 #[derive(Debug)]
 pub struct AppError {
     pub code: String,
+    pub detail: Option<String>,
 }
 
 impl AppError {
     pub fn new(code: &str) -> Self {
         Self {
             code: code.to_string(),
+            detail: None,
+        }
+    }
+
+    pub fn with_detail(code: &str, detail: impl Into<String>) -> Self {
+        Self {
+            code: code.to_string(),
+            detail: Some(detail.into()),
         }
     }
 }
@@ -30,8 +40,14 @@ impl Serialize for AppError {
         #[derive(Serialize)]
         struct Wire<'a> {
             code: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            detail: Option<&'a str>,
         }
-        Wire { code: &self.code }.serialize(serializer)
+        Wire {
+            code: &self.code,
+            detail: self.detail.as_deref(),
+        }
+        .serialize(serializer)
     }
 }
 
@@ -60,6 +76,18 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&AppError::new("ErrorPasswordRequired")).unwrap(),
             r#"{"code":"ErrorPasswordRequired"}"#
+        );
+    }
+
+    #[test]
+    fn detail_serializes_only_when_present() {
+        assert_eq!(
+            serde_json::to_string(&AppError::with_detail(
+                "ErrorExportFileExists",
+                "alias.pub"
+            ))
+            .unwrap(),
+            r#"{"code":"ErrorExportFileExists","detail":"alias.pub"}"#
         );
     }
 
