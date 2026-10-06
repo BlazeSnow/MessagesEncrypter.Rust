@@ -2321,7 +2321,7 @@ dependencies = [
 
 [[package]]
 name = "messagesencrypter"
-version = "2026.10.5"
+version = "2026.10.6"
 dependencies = [
  "aes-gcm",
  "base64 0.23.1",
