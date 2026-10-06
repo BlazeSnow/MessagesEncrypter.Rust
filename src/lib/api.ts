@@ -86,11 +86,12 @@ export const api = {
   hasSavedPassword: (privateFingerprint: string) =>
     invoke<boolean>("has_saved_password", { privateFingerprint }),
 
-  exportKey: (category: KeyCategory, fingerprint: string, part?: "public" | "private") =>
+  exportKey: (category: KeyCategory, fingerprint: string, part?: "public" | "private", overwrite?: boolean) =>
     invoke<string>("export_key", {
       category,
       fingerprint,
       ...(part ? { part } : {}),
+      ...(overwrite ? { overwrite: true } : {}),
     }),
 
   getAppSettings: () => invoke<AppSettings>("get_app_settings"),
@@ -107,4 +108,15 @@ export function errorCodeOf(error: unknown): string {
     }
   }
   return "ErrorInternal";
+}
+
+/** 从 invoke 的 rejection 中提取可选补充信息（如冲突文件名）。 */
+export function errorDetailOf(error: unknown): string | null {
+  if (error && typeof error === "object" && "detail" in error) {
+    const detail = (error as { detail?: unknown }).detail;
+    if (typeof detail === "string" && detail) {
+      return detail;
+    }
+  }
+  return null;
 }

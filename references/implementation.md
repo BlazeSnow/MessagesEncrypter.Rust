@@ -42,6 +42,7 @@
 - **版本号**：semver 三段 `YYYY.M.D`（Tauri 要求）；MSI 主版本 ≤255 与日期制冲突，MSIX 允许 65535（四段在清单层映射）→ 桌面分发最终仅 msixbundle。商店已发布 2026.9.24.0（beta）与 2026.9.25.0，后续商店版本必须更高。
 - **旧版迁移时序**：旧版（C#）签名文件带 UTF-8 BOM，verify 需剥离；首启动先在未修改的原始库上校验（篡改不被本版结构调整掩盖），通过后再加 settings 表等变更并重签，校验失败时跳过重签以免掩盖篡改；任何字节变更（含建 settings 表）后都需重签。已用旧版真实数据端到端验证（`legacy_machine_store_migrates_without_tamper_warning`，`#[ignore]`，依赖真实 LocalState + 凭据）。
 - **语言切换即时生效**：i18next 动态切换，替代原版「重启生效」（已记录的实现偏差）。
+- **rsa 0.9 公钥解析 4096 位上限**：`RsaPublicKey::new` 硬编码 `MAX_SIZE = 4096`，SPKI 解码链（`from_public_key_pem`）因此拒绝 8192 位公钥并报 `ErrorPublicKeyInvalid`；而生成与 CNG 导入走 `from_components` 不受限——导入公钥、keyType 显示、加密到 8192 位接收方三处全部受影响（2026.10.6 导出 8192 公钥后无法导入踩过）。`keys::parse_public_key_pem` 复刻 SPKI→PKCS#1 解包并以 `new_with_max_size` 把导入上限放宽到 16384 位（防 DoS 仍有界），三处调用点统一收敛；DER 结构经 openssl 交叉验证无误。回归测试以合成奇数模数构造 SPKI（仓库不存放任何密钥材料）。
 
 ### 3.2 密钥生成
 
@@ -55,9 +56,10 @@
 ### 3.4 UI 交互
 
 - **密钥选择记忆**：按指纹写入 settings；恢复请求与手选存在竞态，用户手选后恢复不得覆盖；自动选中第一把也写入记忆。
+- **导出同名文件确认**：目标已有同名文件时 `export_key` 返回 `ErrorExportFileExists`（`AppError.detail` 携带文件名；`detail` 缺省不序列化，其余错误线格式不变）；前端经 `useExportKey` hook 记录冲突并渲染应用内 `ExportOverwriteDialog`（AlertDialog，与删除确认同款交互），确认后带 `overwrite = true` 重试，取消/Escape 清除冲突静默返回，重试失败保留冲突可再次确认。
 - **私钥生成后台化**：对话框即关、列表进度卡；生成状态提升为全局 GenerationProvider（切页不丢、防并发生成），仅禁用生成按钮。
 - **私钥菜单补齐公钥操作**：`export_key` 增加 `part` 参数，私钥条目可导出对应公钥；KeyCard 右键与「更多」下拉共用动作集。
-- **图标语义**：接收方 KeyRound、私钥 ShieldKeyhole、解密 LockOpen、生成 CirclePlus、导入 Import（全局闭锁=加密/开锁=解密）。
+- **图标语义**：接收方 KeyRound、私钥 ShieldKeyhole、解密 LockOpen、生成 CirclePlus、导入 Import（全局闭锁=加密/开锁=解密）；密钥卡片菜单动作 Copy=复制、Share=导出（文件分享）、KeySquare=修改密码、Pencil=重命名、Trash2=删除（destructive 项图标随 variant 自动变红）；菜单按「数据（复制/导出）→ 管理（改密/重命名）→ 危险（删除）」分组插入分隔线（`separatorBefore`）。
 - **设置页仓库链接**：指向本仓库 MessagesEncrypter.Rust；references/ 中旧仓库 URL 属历史事实不改。
 
 ### 3.5 测试体系（cargo 54 / vitest 50）
@@ -78,7 +80,7 @@
 - 命令层 `src-tauri/src/commands/`：mod（共享工具与 DTO）+ integrity / keys / crypto / store 按域拆分；lib.rs 用完整子模块路径引用（tauri 宏在定义模块内解析）。
 - 密钥库 `src-tauri/src/keystore/`：mod（schema/CRUD/settings）+ legacy（id 列重建、keys.json 迁移）。
 - 密钥测试独立文件 `src-tauri/src/keys_tests.rs`（`#[path]` 子模块）。
-- 前端对话框组件 `src/components/keys/`：Generate / ImportPrivateKey / ImportPublicKey / ChangePassword / Rename / Delete（后两个两页共用）+ EmptyList；对话框自含表单状态，条件渲染即重置。
+- 前端对话框组件 `src/components/keys/`：Generate / ImportPrivateKey / ImportPublicKey / ChangePassword / Rename / Delete（后两个两页共用）/ ExportOverwriteDialog（两页共用，配 `lib/keyFiles.ts` 的 `useExportKey` hook）+ EmptyList；对话框自含表单状态，条件渲染即重置。
 
 ## 5. 环境备忘（坑）
 
@@ -89,3 +91,4 @@
 5. **opener 权限 scope 为空 = 拒绝一切路径**：仅启用 `opener:allow-open-path` 命令而不给 allow 列表时，`open_path` 必然 ForbiddenPath；capability 需内联授予 `allow: [{ path: "**" }]`。
 6. **shadcn textarea 自带 field-sizing-content**（随内容自动长高且无上限），大段公钥会撑变形弹窗；长内容场景需加 `max-h` + 内部滚动。
 7. **PowerShell 管道单元素退化为标量**：`$list[0]` 取到单个字符，须 `@()` 包裹强制数组（make-msix.ps1 踩过）。
+8. **explorer `/select,` 引号敏感**：路径含空格时 `Command::arg` 按整参数加引号，实际命令行为 `"/select,路径"`，explorer 解析不了该形态，退回打开「文档」目录且不选中（2026.10.6 导出公钥踩过）。须 `raw_arg` 只给路径加引号得到 `/select,"路径"`（`commands::keys::explorer_select_arg`）；两种形态行为已用 Shell COM 无头验证。

@@ -1,4 +1,6 @@
 import { MoreHorizontal } from "lucide-react";
+import { Fragment } from "react";
+import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,12 +9,14 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { KeyEntry } from "@/lib/api";
@@ -20,8 +24,12 @@ import type { KeyEntry } from "@/lib/api";
 export interface KeyCardAction {
   /** 资源键（多语言在渲染层解析）。 */
   labelKey: string;
+  /** 菜单图标（下拉与右键菜单共用）。 */
+  icon?: ReactNode;
   onSelect: () => void;
   danger?: boolean;
+  /** 本项之前插入分隔线（动作分组：数据 → 管理 → 危险）。 */
+  separatorBefore?: boolean;
 }
 
 /**
@@ -50,13 +58,16 @@ export function KeyCard({ entry, actions }: { entry: KeyEntry; actions: KeyCardA
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {menuItems.map((item) => (
-                  <DropdownMenuItem
-                    key={item.labelKey}
-                    variant={item.danger ? "destructive" : "default"}
-                    onSelect={item.onSelect}
-                  >
-                    {item.label}
-                  </DropdownMenuItem>
+                  <Fragment key={item.labelKey}>
+                    {item.separatorBefore ? <DropdownMenuSeparator /> : null}
+                    <DropdownMenuItem
+                      variant={item.danger ? "destructive" : "default"}
+                      onSelect={item.onSelect}
+                    >
+                      {item.icon}
+                      {item.label}
+                    </DropdownMenuItem>
+                  </Fragment>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -65,13 +76,16 @@ export function KeyCard({ entry, actions }: { entry: KeyEntry; actions: KeyCardA
       </ContextMenuTrigger>
       <ContextMenuContent>
         {menuItems.map((item) => (
-          <ContextMenuItem
-            key={item.labelKey}
-            variant={item.danger ? "destructive" : "default"}
-            onSelect={item.onSelect}
-          >
-            {item.label}
-          </ContextMenuItem>
+          <Fragment key={item.labelKey}>
+            {item.separatorBefore ? <ContextMenuSeparator /> : null}
+            <ContextMenuItem
+              variant={item.danger ? "destructive" : "default"}
+              onSelect={item.onSelect}
+            >
+              {item.icon}
+              {item.label}
+            </ContextMenuItem>
+          </Fragment>
         ))}
       </ContextMenuContent>
     </ContextMenu>

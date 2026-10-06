@@ -1,5 +1,7 @@
 //! 密钥管理命令：生成 / 导入 / 重命名 / 删除 / 改密 / 导出。
 
+use std::os::windows::process::CommandExt;
+
 use tauri::State;
 
 use crate::credman;
@@ -210,12 +212,15 @@ pub async fn has_saved_password(
 /// 导出密钥到导出目录（默认下载目录），并在资源管理器中定位文件。
 /// `part = Some("public")`：导出私钥条目对应的公钥（.pub，原版「我的私钥」页同款能力）；
 /// 默认导出条目本体（私钥 → 加密 .pem，公钥 → .pub）。
+/// 目标已有同名文件时返回 `ErrorExportFileExists`（detail 为文件名），
+/// 前端确认覆盖后以 `overwrite = true` 重试。
 #[tauri::command]
 pub async fn export_key(
     state: State<'_, AppState>,
     category: String,
     fingerprint: String,
     part: Option<String>,
+    overwrite: Option<bool>,
 ) -> AppResult<String> {
     validate_category(&category)?;
     state.require_healthy_store()?;
@@ -246,16 +251,36 @@ pub async fn export_key(
         std::fs::create_dir_all(&folder).map_err(|_| AppError::new("ErrorExportFailed"))?;
 
         let file_name = format!("{}.{}", sanitize_file_name(&record.alias), extension);
-        let path = std::path::Path::new(&folder).join(file_name);
+        let path = std::path::Path::new(&folder).join(&file_name);
+        ensure_overwrite_allowed(&path, overwrite.unwrap_or(false))?;
         std::fs::write(&path, content).map_err(|_| AppError::new("ErrorExportFailed"))?;
 
-        // 在资源管理器中定位（失败不影响导出结果）。
+        // 在资源管理器中定位文件（失败不影响导出结果）。
         let _ = std::process::Command::new("explorer")
-            .arg(format!("/select,{}", path.display()))
+            .raw_arg(explorer_select_arg(&path))
             .spawn();
         Ok(path.display().to_string())
     }))
     .await
+}
+
+/// 目标文件已存在且用户未确认覆盖时报错；detail 携带文件名供确认弹窗展示。
+fn ensure_overwrite_allowed(path: &std::path::Path, overwrite: bool) -> AppResult<()> {
+    if path.exists() && !overwrite {
+        let file_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .to_string();
+        return Err(AppError::with_detail("ErrorExportFileExists", file_name));
+    }
+    Ok(())
+}
+
+/// explorer 定位参数。引号必须只包路径部分：路径含空格时 `Command::arg`
+/// 会把整个 `/select,路径` 包进引号，explorer 解析不了该形态，会退回打开「文档」目录。
+fn explorer_select_arg(path: &std::path::Path) -> String {
+    format!("/select,\"{}\"", path.display())
 }
 
 fn default_downloads_dir() -> String {
@@ -317,5 +342,36 @@ mod tests {
         validate_category(CATEGORY_RECIPIENT).unwrap();
         validate_category(CATEGORY_PRIVATE).unwrap();
         assert!(validate_category("other").is_err());
+    }
+
+    #[test]
+    fn explorer_select_arg_quotes_only_the_path() {
+        assert_eq!(
+            explorer_select_arg(std::path::Path::new(r"C:\dir\name.pub")),
+            r#"/select,"C:\dir\name.pub""#
+        );
+        // 带空格的路径整体加引号会让 explorer 退回打开「文档」目录
+        assert_eq!(
+            explorer_select_arg(std::path::Path::new(r"C:\my keys\a b.pub")),
+            r#"/select,"C:\my keys\a b.pub""#
+        );
+    }
+
+    #[test]
+    fn ensure_overwrite_allowed_requires_confirmation_for_existing_file() {
+        let dir = std::env::temp_dir().join(format!("me_overwrite_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("已存在.pub");
+        std::fs::write(&path, "x").unwrap();
+
+        let err = ensure_overwrite_allowed(&path, false).unwrap_err();
+        assert_eq!(err.code, "ErrorExportFileExists");
+        assert_eq!(err.detail.as_deref(), Some("已存在.pub"));
+        assert!(ensure_overwrite_allowed(&path, true).is_ok());
+
+        let missing = dir.join("不存在.pub");
+        assert!(ensure_overwrite_allowed(&missing, false).is_ok());
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

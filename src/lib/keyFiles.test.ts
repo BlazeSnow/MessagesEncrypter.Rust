@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { act, renderHook } from "@testing-library/react";
 import { toast } from "sonner";
 
-import { exportKey, openExportFolder, pickKeyFile } from "@/lib/keyFiles";
+import { openExportFolder, pickKeyFile, useExportKey } from "@/lib/keyFiles";
 
-const exportKeyBackend = vi.fn(async (_c: string, _f: string, _p?: string) => "C:/out/key.pub");
+const exportKeyBackend = vi.fn(
+  async (_c: string, _f: string, _p?: string, _o?: boolean) => "C:/out/key.pub",
+);
 const getAppSettings = vi.fn(async () => ({
   exportFolder: savedFolder.folder,
   displayLanguage: "zh-Hans",
@@ -18,11 +21,18 @@ const fileContent = { text: "PEM-CONTENT" };
 
 vi.mock("@/lib/api", () => ({
   api: {
-    exportKey: (category: string, fingerprint: string, part?: string) =>
-      exportKeyBackend(category, fingerprint, part),
+    exportKey: (category: string, fingerprint: string, part?: string, overwrite?: boolean) =>
+      exportKeyBackend(category, fingerprint, part, overwrite),
     getAppSettings: () => getAppSettings(),
   },
-  errorCodeOf: () => "ErrorInternal",
+  errorCodeOf: (error: unknown) => {
+    const code = (error as { code?: unknown } | null)?.code;
+    return typeof code === "string" && code ? code : "ErrorInternal";
+  },
+  errorDetailOf: (error: unknown) => {
+    const detail = (error as { detail?: unknown } | null)?.detail;
+    return typeof detail === "string" && detail ? detail : null;
+  },
 }));
 
 vi.mock("@tauri-apps/api/path", () => ({
@@ -104,17 +114,76 @@ describe("keyFiles", () => {
   });
 
   it("exportKey 成功时提示密钥已导出", async () => {
-    await exportKey("recipient", "FP-R", "public");
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("recipient", "FP-R", "public"));
 
-    expect(exportKeyBackend).toHaveBeenCalledWith("recipient", "FP-R", "public");
+    expect(exportKeyBackend).toHaveBeenCalledWith("recipient", "FP-R", "public", undefined);
     expect(toast.success).toHaveBeenCalledWith("密钥已导出。");
+    expect(result.current.conflict).toBeNull();
   });
 
   it("exportKey 失败时提示导出失败且不抛出", async () => {
     exportKeyBackend.mockRejectedValueOnce({ code: "ErrorExportFailed" });
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("private", "FP-P"));
 
-    await expect(exportKey("private", "FP-P")).resolves.toBeUndefined();
     expect(toast.error).toHaveBeenCalledWith("导出密钥失败。");
+    expect(result.current.conflict).toBeNull();
+  });
+
+  it("exportKey 同名文件时记录冲突等待确认而不提示", async () => {
+    exportKeyBackend.mockRejectedValueOnce({
+      code: "ErrorExportFileExists",
+      detail: "alias.pub",
+    });
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("recipient", "FP-R", "public"));
+
+    expect(result.current.conflict).toEqual({
+      category: "recipient",
+      fingerprint: "FP-R",
+      part: "public",
+      fileName: "alias.pub",
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("确认覆盖后带 overwrite 重试并提示成功、清除冲突", async () => {
+    exportKeyBackend
+      .mockRejectedValueOnce({ code: "ErrorExportFileExists", detail: "alias.pub" })
+      .mockResolvedValueOnce("C:/out/key.pub");
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("recipient", "FP-R", "public"));
+    await act(() => result.current.confirmOverwrite());
+
+    expect(exportKeyBackend).toHaveBeenLastCalledWith("recipient", "FP-R", "public", true);
+    expect(toast.success).toHaveBeenCalledWith("密钥已导出。");
+    expect(result.current.conflict).toBeNull();
+  });
+
+  it("确认覆盖重试失败时提示导出失败且保留冲突", async () => {
+    exportKeyBackend
+      .mockRejectedValueOnce({ code: "ErrorExportFileExists", detail: "alias.pub" })
+      .mockRejectedValueOnce({ code: "ErrorExportFailed" });
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("private", "FP-P"));
+    await act(() => result.current.confirmOverwrite());
+
+    expect(toast.error).toHaveBeenCalledWith("导出密钥失败。");
+    expect(result.current.conflict).not.toBeNull();
+  });
+
+  it("取消覆盖清除冲突", async () => {
+    exportKeyBackend.mockRejectedValueOnce({
+      code: "ErrorExportFileExists",
+      detail: "alias.pub",
+    });
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("private", "FP-P"));
+    act(() => result.current.cancelOverwrite());
+
+    expect(result.current.conflict).toBeNull();
   });
 
   it("openExportFolder 优先打开配置的导出目录", async () => {

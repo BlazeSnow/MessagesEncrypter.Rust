@@ -35,7 +35,7 @@ describe("KeyCard", () => {
         entry={entry}
         actions={[
           { labelKey: "重命名", onSelect: onRename },
-          { labelKey: "删除", onSelect: onDelete, danger: true },
+          { labelKey: "删除", onSelect: onDelete, danger: true, separatorBefore: true },
         ]}
       />,
     );
@@ -44,6 +44,8 @@ describe("KeyCard", () => {
 
     expect(await screen.findByText("重命名")).toBeInTheDocument();
     expect(screen.getByText("删除")).toBeInTheDocument();
+    // separatorBefore 渲染分隔线（右键菜单未展开，分隔线仅来自下拉）
+    expect(screen.getAllByRole("separator")).toHaveLength(1);
 
     await user.click(screen.getByText("重命名"));
     expect(onRename).toHaveBeenCalledTimes(1);

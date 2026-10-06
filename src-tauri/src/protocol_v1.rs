@@ -9,7 +9,6 @@ use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use pkcs8::DecodePrivateKey as _;
-use pkcs8::DecodePublicKey as _;
 use pkcs8::SecretDocument;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -82,7 +81,10 @@ fn parse_public_key(pem: &str) -> Result<RsaPublicKey, ProtocolError> {
     if pem.is_empty() {
         return Err(err(ERROR_PUBLIC_KEY_REQUIRED));
     }
-    let key = RsaPublicKey::from_public_key_pem(pem).map_err(|_| err(ERROR_PUBLIC_KEY_INVALID))?;
+    // rsa 0.9 的 from_public_key_pem 有 4096 位模数硬上限，会拒绝 8192 位接收方公钥，
+    // 统一走 keys::parse_public_key_pem（上限放宽至 16384 位）。
+    let key =
+        crate::keys::parse_public_key_pem(pem).map_err(|_| err(ERROR_PUBLIC_KEY_INVALID))?;
     if key.n().bits() < MINIMUM_RSA_KEY_SIZE_BITS {
         return Err(err(ERROR_PUBLIC_KEY_TOO_SMALL));
     }

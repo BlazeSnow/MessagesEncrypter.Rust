@@ -5,7 +5,6 @@
 
 use pkcs8::der::Decode as _;
 use pkcs8::DecodePrivateKey;
-use pkcs8::DecodePublicKey;
 use pkcs8::EncodePrivateKey;
 use pkcs8::EncodePublicKey;
 use pkcs8::LineEnding;
@@ -15,6 +14,7 @@ use rand::rngs::OsRng;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::sha2::{Digest, Sha256};
 use rsa::traits::PublicKeyParts;
+use rsa::BigUint;
 use rsa::RsaPrivateKey;
 use rsa::RsaPublicKey;
 
@@ -41,6 +41,37 @@ pub const ERROR_PRIVATE_KEY_TOO_SMALL: &str = "ErrorPrivateKeyTooSmall";
 pub const ERROR_PUBLIC_KEY_REQUIRED: &str = "ErrorPublicKeyRequired";
 pub const ERROR_PUBLIC_KEY_INVALID: &str = "ErrorPublicKeyInvalid";
 pub const ERROR_PUBLIC_KEY_TOO_SMALL: &str = "ErrorPublicKeyTooSmall";
+
+/// 导入公钥的模数上限（位）。rsa 0.9 的 `RsaPublicKey::new` 将模数硬编码上限
+/// 4096 位（防 DoS），SPKI 解码链（`from_public_key_pem`）因此拒绝 8192 位公钥，
+/// 而生成与 CNG 导入走 `from_components` 不受限，产品承诺支持 8192——这里复刻
+/// SPKI→PKCS#1 解包后用 `new_with_max_size` 放宽上限：兼容外部 8192 大钥，
+/// 同时保持防 DoS 有界。
+pub const MAX_IMPORTED_PUBLIC_KEY_BITS: usize = 16384;
+
+const RSA_ENCRYPTION_OID: pkcs8::der::asn1::ObjectIdentifier =
+    pkcs8::der::asn1::ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.1");
+
+/// 解析 SPKI PEM 公钥（`from_public_key_pem` 的无 4096 位上限版本）。
+pub fn parse_public_key_pem(public_key_pem: &str) -> AppResult<RsaPublicKey> {
+    let invalid = || error(ERROR_PUBLIC_KEY_INVALID);
+    let (_, doc) = pkcs8::Document::from_pem(public_key_pem.trim()).map_err(|_| invalid())?;
+    let spki = doc
+        .decode_msg::<pkcs8::SubjectPublicKeyInfoRef>()
+        .map_err(|_| invalid())?;
+    if spki.algorithm.oid != RSA_ENCRYPTION_OID {
+        return Err(invalid());
+    }
+    let pkcs1_key = rsa::pkcs1::RsaPublicKey::from_der(
+        spki.subject_public_key
+            .as_bytes()
+            .ok_or_else(invalid)?,
+    )
+    .map_err(|_| invalid())?;
+    let n = BigUint::from_bytes_be(pkcs1_key.modulus.as_bytes());
+    let e = BigUint::from_bytes_be(pkcs1_key.public_exponent.as_bytes());
+    RsaPublicKey::new_with_max_size(n, e, MAX_IMPORTED_PUBLIC_KEY_BITS).map_err(|_| invalid())
+}
 
 /// 一组完整的密钥材料（公钥 PEM、加密私钥 PEM、指纹、位数）。
 #[derive(Debug, Clone)]
@@ -211,8 +242,7 @@ pub fn import_public_key(public_key_pem: &str) -> AppResult<(String, String, usi
     if trimmed.is_empty() {
         return Err(error(ERROR_PUBLIC_KEY_REQUIRED));
     }
-    let key =
-        RsaPublicKey::from_public_key_pem(trimmed).map_err(|_| error(ERROR_PUBLIC_KEY_INVALID))?;
+    let key = parse_public_key_pem(trimmed)?;
     if key.n().bits() < MIN_RSA_KEY_SIZE_BITS {
         return Err(error(ERROR_PUBLIC_KEY_TOO_SMALL));
     }
@@ -254,7 +284,7 @@ pub fn estimate_private_key_bits(encrypted_pem: &str) -> Option<usize> {
 }
 
 pub fn public_key_bits(public_key_pem: &str) -> Option<usize> {
-    RsaPublicKey::from_public_key_pem(public_key_pem.trim())
+    parse_public_key_pem(public_key_pem)
         .ok()
         .map(|k| k.n().bits())
 }
@@ -270,4 +300,35 @@ pub fn base64_decode(data: &str) -> Option<Vec<u8>> {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine as _;
     STANDARD.decode(data).ok()
+}
+
+/// 测试专用：合成指定位数的 SPKI 公钥 PEM。模数为「最高位置 1 的奇数」即可通过
+/// 公钥合法性检查（解析路径不验证素性），避免在仓库中存放任何真实密钥材料。
+#[cfg(test)]
+pub(crate) fn synthetic_public_key_pem(modulus_bits: usize) -> String {
+    use pkcs8::der::asn1::{AnyRef, BitStringRef, ObjectIdentifier, UintRef};
+    use pkcs8::der::{Encode as _, Tag};
+
+    assert_eq!(modulus_bits % 8, 0, "合成模数位数须为 8 的倍数");
+    let len = modulus_bits / 8;
+    let mut modulus = vec![0xA5u8; len];
+    modulus[0] = 0x80; // 置最高位，保证位数精确
+    *modulus.last_mut().unwrap() = 0xA7; // 奇数（公钥检查要求 n 为奇数）
+
+    let pkcs1_key = rsa::pkcs1::RsaPublicKey {
+        modulus: UintRef::new(&modulus).unwrap(),
+        public_exponent: UintRef::new(&[0x01, 0x00, 0x01]).unwrap(),
+    };
+    let pkcs1_der = pkcs1_key.to_der().unwrap();
+    let spki = pkcs8::SubjectPublicKeyInfoRef {
+        algorithm: pkcs8::AlgorithmIdentifierRef {
+            oid: ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.1"),
+            parameters: Some(AnyRef::new(Tag::Null, &[]).unwrap()),
+        },
+        subject_public_key: BitStringRef::new(0, &pkcs1_der).unwrap(),
+    };
+    pkcs8::Document::try_from(spki.to_der().unwrap())
+        .unwrap()
+        .to_pem("PUBLIC KEY", pkcs8::LineEnding::LF)
+        .unwrap()
 }
