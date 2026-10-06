@@ -1,5 +1,7 @@
 //! 密钥管理命令：生成 / 导入 / 重命名 / 删除 / 改密 / 导出。
 
+use std::os::windows::process::CommandExt;
+
 use tauri::State;
 
 use crate::credman;
@@ -249,13 +251,19 @@ pub async fn export_key(
         let path = std::path::Path::new(&folder).join(file_name);
         std::fs::write(&path, content).map_err(|_| AppError::new("ErrorExportFailed"))?;
 
-        // 在资源管理器中定位（失败不影响导出结果）。
+        // 在资源管理器中定位文件（失败不影响导出结果）。
         let _ = std::process::Command::new("explorer")
-            .arg(format!("/select,{}", path.display()))
+            .raw_arg(explorer_select_arg(&path))
             .spawn();
         Ok(path.display().to_string())
     }))
     .await
+}
+
+/// explorer 定位参数。引号必须只包路径部分：路径含空格时 `Command::arg`
+/// 会把整个 `/select,路径` 包进引号，explorer 解析不了该形态，会退回打开「文档」目录。
+fn explorer_select_arg(path: &std::path::Path) -> String {
+    format!("/select,\"{}\"", path.display())
 }
 
 fn default_downloads_dir() -> String {
@@ -317,5 +325,18 @@ mod tests {
         validate_category(CATEGORY_RECIPIENT).unwrap();
         validate_category(CATEGORY_PRIVATE).unwrap();
         assert!(validate_category("other").is_err());
+    }
+
+    #[test]
+    fn explorer_select_arg_quotes_only_the_path() {
+        assert_eq!(
+            explorer_select_arg(std::path::Path::new(r"C:\dir\name.pub")),
+            r#"/select,"C:\dir\name.pub""#
+        );
+        // 带空格的路径整体加引号会让 explorer 退回打开「文档」目录
+        assert_eq!(
+            explorer_select_arg(std::path::Path::new(r"C:\my keys\a b.pub")),
+            r#"/select,"C:\my keys\a b.pub""#
+        );
     }
 }

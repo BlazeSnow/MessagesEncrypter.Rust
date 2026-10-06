@@ -89,3 +89,4 @@
 5. **opener 权限 scope 为空 = 拒绝一切路径**：仅启用 `opener:allow-open-path` 命令而不给 allow 列表时，`open_path` 必然 ForbiddenPath；capability 需内联授予 `allow: [{ path: "**" }]`。
 6. **shadcn textarea 自带 field-sizing-content**（随内容自动长高且无上限），大段公钥会撑变形弹窗；长内容场景需加 `max-h` + 内部滚动。
 7. **PowerShell 管道单元素退化为标量**：`$list[0]` 取到单个字符，须 `@()` 包裹强制数组（make-msix.ps1 踩过）。
+8. **explorer `/select,` 引号敏感**：路径含空格时 `Command::arg` 按整参数加引号，实际命令行为 `"/select,路径"`，explorer 解析不了该形态，退回打开「文档」目录且不选中（2026.10.6 导出公钥踩过）。须 `raw_arg` 只给路径加引号得到 `/select,"路径"`（`commands::keys::explorer_select_arg`）；两种形态行为已用 Shell COM 无头验证。
