@@ -1,4 +1,4 @@
-import { CirclePlus, FolderOpen, Import, Loader2 } from "lucide-react";
+import { CirclePlus, Copy, FileDown, FolderOpen, Import, KeySquare, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -121,6 +121,7 @@ export function PrivateKeysPage() {
   const actionsFor = (entry: KeyEntry): KeyCardAction[] => [
     {
       labelKey: t("CopyPublicKeyMenuText"),
+      icon: <Copy className="size-4" />,
       onSelect: () => {
         void (async () => {
           if (!entry.publicKeyPem) {
@@ -134,10 +135,12 @@ export function PrivateKeysPage() {
     },
     {
       labelKey: t("ExportPublicKeyMenuText"),
+      icon: <FileDown className="size-4" />,
       onSelect: () => void exportKey("private", entry.fingerprint, "public"),
     },
     {
       labelKey: t("CopyPrivateKeyMenuText"),
+      icon: <Copy className="size-4" />,
       onSelect: () => {
         void (async () => {
           if (!entry.encryptedPrivateKeyPem) {
@@ -151,18 +154,22 @@ export function PrivateKeysPage() {
     },
     {
       labelKey: t("ExportPrivateKeyMenuText"),
+      icon: <FileDown className="size-4" />,
       onSelect: () => void exportKey("private", entry.fingerprint),
     },
     {
       labelKey: t("ChangePasswordMenuText"),
+      icon: <KeySquare className="size-4" />,
       onSelect: () => setDialog({ kind: "changePassword", entry }),
     },
     {
       labelKey: t("RenameKeyMenuText"),
+      icon: <Pencil className="size-4" />,
       onSelect: () => setDialog({ kind: "rename", entry }),
     },
     {
       labelKey: t("DeleteKeyMenuText"),
+      icon: <Trash2 className="size-4" />,
       onSelect: () => setDialog({ kind: "delete", entry }),
       danger: true,
     },

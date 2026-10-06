@@ -59,7 +59,7 @@
 - **导出同名文件确认**：目标已有同名文件时 `export_key` 返回 `ErrorExportFileExists`（`AppError.detail` 携带文件名；`detail` 缺省不序列化，其余错误线格式不变）；前端经 `useExportKey` hook 记录冲突并渲染应用内 `ExportOverwriteDialog`（AlertDialog，与删除确认同款交互），确认后带 `overwrite = true` 重试，取消/Escape 清除冲突静默返回，重试失败保留冲突可再次确认。
 - **私钥生成后台化**：对话框即关、列表进度卡；生成状态提升为全局 GenerationProvider（切页不丢、防并发生成），仅禁用生成按钮。
 - **私钥菜单补齐公钥操作**：`export_key` 增加 `part` 参数，私钥条目可导出对应公钥；KeyCard 右键与「更多」下拉共用动作集。
-- **图标语义**：接收方 KeyRound、私钥 ShieldKeyhole、解密 LockOpen、生成 CirclePlus、导入 Import（全局闭锁=加密/开锁=解密）。
+- **图标语义**：接收方 KeyRound、私钥 ShieldKeyhole、解密 LockOpen、生成 CirclePlus、导入 Import（全局闭锁=加密/开锁=解密）；密钥卡片菜单动作 Copy=复制、FileDown=导出（与对话框 FileUp 导入相对）、KeySquare=修改密码、Pencil=重命名、Trash2=删除（destructive 项图标随 variant 自动变红）。
 - **设置页仓库链接**：指向本仓库 MessagesEncrypter.Rust；references/ 中旧仓库 URL 属历史事实不改。
 
 ### 3.5 测试体系（cargo 54 / vitest 50）

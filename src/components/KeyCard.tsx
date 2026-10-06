@@ -1,4 +1,5 @@
 import { MoreHorizontal } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ import type { KeyEntry } from "@/lib/api";
 export interface KeyCardAction {
   /** 资源键（多语言在渲染层解析）。 */
   labelKey: string;
+  /** 菜单图标（下拉与右键菜单共用）。 */
+  icon?: ReactNode;
   onSelect: () => void;
   danger?: boolean;
 }
@@ -55,6 +58,7 @@ export function KeyCard({ entry, actions }: { entry: KeyEntry; actions: KeyCardA
                     variant={item.danger ? "destructive" : "default"}
                     onSelect={item.onSelect}
                   >
+                    {item.icon}
                     {item.label}
                   </DropdownMenuItem>
                 ))}
@@ -70,6 +74,7 @@ export function KeyCard({ entry, actions }: { entry: KeyEntry; actions: KeyCardA
             variant={item.danger ? "destructive" : "default"}
             onSelect={item.onSelect}
           >
+            {item.icon}
             {item.label}
           </ContextMenuItem>
         ))}
