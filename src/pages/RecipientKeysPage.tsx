@@ -1,4 +1,4 @@
-import { Copy, FileDown, FolderOpen, Import, Pencil, Trash2 } from "lucide-react";
+import { Copy, FolderOpen, Import, Pencil, Share, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -97,19 +97,21 @@ export function RecipientKeysPage() {
     },
     {
       labelKey: t("ExportPublicKeyMenuText"),
-      icon: <FileDown className="size-4" />,
+      icon: <Share className="size-4" />,
       onSelect: () => void exportKey("recipient", entry.fingerprint),
     },
     {
       labelKey: t("RenameKeyMenuText"),
       icon: <Pencil className="size-4" />,
       onSelect: () => setDialog({ kind: "rename", entry }),
+      separatorBefore: true,
     },
     {
       labelKey: t("DeleteKeyMenuText"),
       icon: <Trash2 className="size-4" />,
       onSelect: () => setDialog({ kind: "delete", entry }),
       danger: true,
+      separatorBefore: true,
     },
   ];
 

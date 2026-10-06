@@ -1,4 +1,4 @@
-import { CirclePlus, Copy, FileDown, FolderOpen, Import, KeySquare, Loader2, Pencil, Trash2 } from "lucide-react";
+import { CirclePlus, Copy, FolderOpen, Import, KeySquare, Loader2, Pencil, Share, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -135,7 +135,7 @@ export function PrivateKeysPage() {
     },
     {
       labelKey: t("ExportPublicKeyMenuText"),
-      icon: <FileDown className="size-4" />,
+      icon: <Share className="size-4" />,
       onSelect: () => void exportKey("private", entry.fingerprint, "public"),
     },
     {
@@ -154,13 +154,14 @@ export function PrivateKeysPage() {
     },
     {
       labelKey: t("ExportPrivateKeyMenuText"),
-      icon: <FileDown className="size-4" />,
+      icon: <Share className="size-4" />,
       onSelect: () => void exportKey("private", entry.fingerprint),
     },
     {
       labelKey: t("ChangePasswordMenuText"),
       icon: <KeySquare className="size-4" />,
       onSelect: () => setDialog({ kind: "changePassword", entry }),
+      separatorBefore: true,
     },
     {
       labelKey: t("RenameKeyMenuText"),
@@ -172,6 +173,7 @@ export function PrivateKeysPage() {
       icon: <Trash2 className="size-4" />,
       onSelect: () => setDialog({ kind: "delete", entry }),
       danger: true,
+      separatorBefore: true,
     },
   ];
 
