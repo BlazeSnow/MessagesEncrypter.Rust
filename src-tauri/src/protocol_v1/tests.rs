@@ -380,3 +380,10 @@ fn interop_verify_artifacts() {
     let package = encrypt_to_base64_json(&dotnet_pub, INTEROP_PLAINTEXT).expect("encrypt to dotnet");
     interop_write("rust_package_for_dotnet.txt", &package);
 }
+
+#[test]
+fn parse_public_key_accepts_8192_bit_public_key() {
+    // 回归：rsa 0.9 SPKI 解码链的 4096 位上限曾拒绝 8192 位接收方公钥（影响加密）。
+    let key = parse_public_key(&crate::keys::synthetic_public_key_pem(8192)).unwrap();
+    assert_eq!(key.n().bits(), 8192);
+}

@@ -30,7 +30,7 @@ mod tests {
 
             // 指纹：32 位大写十六进制，可由公钥复算。
             let fingerprint = fingerprint_from_public_key(
-                &RsaPublicKey::from_public_key_pem(material.public_key_pem.trim()).unwrap(),
+                &parse_public_key_pem(&material.public_key_pem).unwrap(),
             )
             .unwrap();
             assert_eq!(fingerprint, material.fingerprint);
@@ -183,5 +183,44 @@ mod bench {
             RsaPrivateKey::new(&mut OsRng, 4096).expect("keygen");
             println!("4096 keygen #{}: {:.2}s", i + 1, t.elapsed().as_secs_f32());
         }
+    }
+}
+
+/// 8192 位公钥回归（合成模数，见 keys::synthetic_public_key_pem）。
+/// 背景：rsa 0.9 的 SPKI 解码链（from_public_key_pem → RsaPublicKey::new）
+/// 硬编码 4096 位模数上限，曾把 8192 位公钥判为格式无效（ErrorPublicKeyInvalid）。
+#[cfg(test)]
+mod public_key_parsing {
+    use super::*;
+
+    #[test]
+    fn import_public_key_accepts_8192_bit_public_key() {
+        let pem = synthetic_public_key_pem(8192);
+        let (normalized, fingerprint, bits) = import_public_key(&pem).unwrap();
+        assert_eq!(bits, 8192);
+        assert!(normalized.contains("BEGIN PUBLIC KEY"));
+        // 规范化 PEM 再次导入，指纹一致
+        let (_, fingerprint_again, _) = import_public_key(&normalized).unwrap();
+        assert_eq!(fingerprint, fingerprint_again);
+    }
+
+    #[test]
+    fn public_key_bits_reports_8192() {
+        assert_eq!(public_key_bits(&synthetic_public_key_pem(8192)), Some(8192));
+    }
+
+    #[test]
+    fn parse_public_key_pem_rejects_garbage_and_private_keys() {
+        assert_eq!(
+            parse_public_key_pem("not a pem").unwrap_err().code,
+            ERROR_PUBLIC_KEY_INVALID
+        );
+        // PKCS#8 私钥不是 SPKI 公钥（保持「SPKI 解析拒绝私钥材料」的原有语义）
+        let private_key = RsaPrivateKey::new(&mut OsRng, 2048).unwrap();
+        let pem = private_key.to_pkcs8_pem(LineEnding::LF).unwrap().to_string();
+        assert_eq!(
+            parse_public_key_pem(&pem).unwrap_err().code,
+            ERROR_PUBLIC_KEY_INVALID
+        );
     }
 }

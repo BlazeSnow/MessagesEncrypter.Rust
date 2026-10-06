@@ -42,6 +42,7 @@
 - **版本号**：semver 三段 `YYYY.M.D`（Tauri 要求）；MSI 主版本 ≤255 与日期制冲突，MSIX 允许 65535（四段在清单层映射）→ 桌面分发最终仅 msixbundle。商店已发布 2026.9.24.0（beta）与 2026.9.25.0，后续商店版本必须更高。
 - **旧版迁移时序**：旧版（C#）签名文件带 UTF-8 BOM，verify 需剥离；首启动先在未修改的原始库上校验（篡改不被本版结构调整掩盖），通过后再加 settings 表等变更并重签，校验失败时跳过重签以免掩盖篡改；任何字节变更（含建 settings 表）后都需重签。已用旧版真实数据端到端验证（`legacy_machine_store_migrates_without_tamper_warning`，`#[ignore]`，依赖真实 LocalState + 凭据）。
 - **语言切换即时生效**：i18next 动态切换，替代原版「重启生效」（已记录的实现偏差）。
+- **rsa 0.9 公钥解析 4096 位上限**：`RsaPublicKey::new` 硬编码 `MAX_SIZE = 4096`，SPKI 解码链（`from_public_key_pem`）因此拒绝 8192 位公钥并报 `ErrorPublicKeyInvalid`；而生成与 CNG 导入走 `from_components` 不受限——导入公钥、keyType 显示、加密到 8192 位接收方三处全部受影响（2026.10.6 导出 8192 公钥后无法导入踩过）。`keys::parse_public_key_pem` 复刻 SPKI→PKCS#1 解包并以 `new_with_max_size` 把导入上限放宽到 16384 位（防 DoS 仍有界），三处调用点统一收敛；DER 结构经 openssl 交叉验证无误。回归测试以合成奇数模数构造 SPKI（仓库不存放任何密钥材料）。
 
 ### 3.2 密钥生成
 
