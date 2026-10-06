@@ -7,6 +7,7 @@ import type { KeyCardAction } from "@/components/KeyCard";
 import { ChangePasswordDialog } from "@/components/keys/ChangePasswordDialog";
 import { DeleteKeyDialog } from "@/components/keys/DeleteKeyDialog";
 import { EmptyList } from "@/components/keys/EmptyList";
+import { ExportOverwriteDialog } from "@/components/keys/ExportOverwriteDialog";
 import { GenerateKeyDialog } from "@/components/keys/GenerateKeyDialog";
 import { ImportPrivateKeyDialog } from "@/components/keys/ImportPrivateKeyDialog";
 import { RenameKeyDialog } from "@/components/keys/RenameKeyDialog";
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import type { KeyEntry } from "@/lib/api";
-import { exportKey, openExportFolder } from "@/lib/keyFiles";
+import { openExportFolder, useExportKey } from "@/lib/keyFiles";
 import { showErrorToast, showStatusToast } from "@/lib/status";
 import { useGeneration } from "@/state/generation";
 import { useKeys } from "@/state/keys";
@@ -32,6 +33,7 @@ export function PrivateKeysPage() {
   const { t } = useTranslation();
   const { privateKeys, refresh } = useKeys();
   const { generation, startGeneration } = useGeneration();
+  const { conflict, busy: overwriteBusy, exportKey, confirmOverwrite, cancelOverwrite } = useExportKey();
   const [dialog, setDialog] = useState<DialogState>({ kind: "closed" });
   const [busy, setBusy] = useState(false);
 
@@ -250,6 +252,14 @@ export function PrivateKeysPage() {
         busy={busy}
         onCancel={close}
         onDelete={() => void submitDelete()}
+      />
+
+      <ExportOverwriteDialog
+        open={conflict !== null}
+        fileName={conflict?.fileName ?? ""}
+        busy={overwriteBusy}
+        onCancel={cancelOverwrite}
+        onConfirm={() => void confirmOverwrite()}
       />
     </div>
   );

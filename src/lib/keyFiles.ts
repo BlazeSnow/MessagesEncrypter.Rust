@@ -1,11 +1,20 @@
 import { basename } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { useState } from "react";
 
 import { api, errorCodeOf, errorDetailOf } from "@/lib/api";
 import type { KeyCategory } from "@/lib/api";
 import { showStatusToast } from "@/lib/status";
 import { t } from "i18next";
 import { toast } from "sonner";
+
+/** 同名文件冲突信息：确认弹窗数据 + 覆盖重试参数。 */
+export interface ExportConflict {
+  category: KeyCategory;
+  fingerprint: string;
+  part?: "public" | "private";
+  fileName: string;
+}
 
 export interface PickedKeyFile {
   fileName: string;
@@ -32,49 +41,49 @@ export async function pickKeyFile(kind: "public" | "private"): Promise<PickedKey
   return { fileName: stem, content };
 }
 
-/** 导出密钥并提示（后端已在资源管理器中定位文件）；
- *  目标已有同名文件时先弹窗确认，确认后覆盖重试。 */
-export async function exportKey(
-  category: KeyCategory,
-  fingerprint: string,
-  part?: "public" | "private",
-) {
-  try {
-    await api.exportKey(category, fingerprint, part);
-    showStatusToast("StatusKeyExported");
-  } catch (error) {
-    if (errorCodeOf(error) === "ErrorExportFileExists") {
-      await confirmOverwriteAndExport(category, fingerprint, part, errorDetailOf(error) ?? "");
+/** 导出流程 hook：导出成功即提示；目标已有同名文件时记录冲突，
+ *  由页面渲染 ExportOverwriteDialog 确认后覆盖重试（取消则清除）。 */
+export function useExportKey() {
+  const [conflict, setConflict] = useState<ExportConflict | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const exportKey = async (
+    category: KeyCategory,
+    fingerprint: string,
+    part?: "public" | "private",
+  ) => {
+    try {
+      await api.exportKey(category, fingerprint, part);
+      showStatusToast("StatusKeyExported");
+    } catch (error) {
+      if (errorCodeOf(error) === "ErrorExportFileExists") {
+        setConflict({ category, fingerprint, part, fileName: errorDetailOf(error) ?? "" });
+        return;
+      }
+      toast.error(t("ErrorExportFailed"));
+    }
+  };
+
+  const confirmOverwrite = async () => {
+    if (!conflict) {
       return;
     }
-    toast.error(t("ErrorExportFailed"));
-  }
-}
+    setBusy(true);
+    try {
+      await api.exportKey(conflict.category, conflict.fingerprint, conflict.part, true);
+      showStatusToast("StatusKeyExported");
+      setConflict(null);
+    } catch (error) {
+      void error;
+      toast.error(t("ErrorExportFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
 
-/** 同名文件确认弹窗（系统级对话框）；取消则静默返回。 */
-async function confirmOverwriteAndExport(
-  category: KeyCategory,
-  fingerprint: string,
-  part: "public" | "private" | undefined,
-  fileName: string,
-) {
-  const { ask } = await import("@tauri-apps/plugin-dialog");
-  const confirmed = await ask(t("ExportOverwriteDialogContent", { 0: fileName }), {
-    title: t("ExportOverwriteDialogTitle"),
-    kind: "warning",
-    okLabel: t("DialogOverwriteButtonText"),
-    cancelLabel: t("DialogCancelButtonText"),
-  });
-  if (!confirmed) {
-    return;
-  }
-  try {
-    await api.exportKey(category, fingerprint, part, true);
-    showStatusToast("StatusKeyExported");
-  } catch (error) {
-    void error;
-    toast.error(t("ErrorExportFailed"));
-  }
+  const cancelOverwrite = () => setConflict(null);
+
+  return { conflict, busy, exportKey, confirmOverwrite, cancelOverwrite };
 }
 
 /** 打开导出目录（未设置时回退系统下载目录）。 */

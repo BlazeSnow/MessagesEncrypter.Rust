@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { act, renderHook } from "@testing-library/react";
 import { toast } from "sonner";
 
-import { exportKey, openExportFolder, pickKeyFile } from "@/lib/keyFiles";
+import { openExportFolder, pickKeyFile, useExportKey } from "@/lib/keyFiles";
 
 const exportKeyBackend = vi.fn(
   async (_c: string, _f: string, _p?: string, _o?: boolean) => "C:/out/key.pub",
@@ -13,7 +14,6 @@ const getAppSettings = vi.fn(async () => ({
   selectedRecipientFingerprint: null,
   selectedPrivateFingerprint: null,
 }));
-const askDialogMock = vi.fn(async (_message?: unknown, _options?: unknown) => true);
 
 const savedFolder = { folder: null as string | null };
 const picked = { path: "C:/keys/alias.pub" as string | null };
@@ -42,7 +42,6 @@ vi.mock("@tauri-apps/api/path", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: (args?: unknown) => openDialogMock(args),
-  ask: (message?: unknown, options?: unknown) => askDialogMock(message, options),
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
@@ -115,63 +114,76 @@ describe("keyFiles", () => {
   });
 
   it("exportKey 成功时提示密钥已导出", async () => {
-    await exportKey("recipient", "FP-R", "public");
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("recipient", "FP-R", "public"));
 
     expect(exportKeyBackend).toHaveBeenCalledWith("recipient", "FP-R", "public", undefined);
     expect(toast.success).toHaveBeenCalledWith("密钥已导出。");
+    expect(result.current.conflict).toBeNull();
   });
 
   it("exportKey 失败时提示导出失败且不抛出", async () => {
     exportKeyBackend.mockRejectedValueOnce({ code: "ErrorExportFailed" });
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("private", "FP-P"));
 
-    await expect(exportKey("private", "FP-P")).resolves.toBeUndefined();
     expect(toast.error).toHaveBeenCalledWith("导出密钥失败。");
+    expect(result.current.conflict).toBeNull();
   });
 
-  it("exportKey 同名文件确认覆盖后带 overwrite 重试并提示成功", async () => {
+  it("exportKey 同名文件时记录冲突等待确认而不提示", async () => {
     exportKeyBackend.mockRejectedValueOnce({
       code: "ErrorExportFileExists",
       detail: "alias.pub",
     });
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("recipient", "FP-R", "public"));
 
-    await exportKey("recipient", "FP-R", "public");
-
-    expect(askDialogMock).toHaveBeenCalledWith(
-      "“alias.pub”已存在于导出目录中，是否覆盖？",
-      expect.objectContaining({
-        title: "覆盖已有文件",
-        okLabel: "覆盖",
-        cancelLabel: "取消",
-      }),
-    );
-    expect(exportKeyBackend).toHaveBeenCalledTimes(2);
-    expect(exportKeyBackend).toHaveBeenLastCalledWith("recipient", "FP-R", "public", true);
-    expect(toast.success).toHaveBeenCalledWith("密钥已导出。");
-  });
-
-  it("exportKey 同名文件取消覆盖时不重试也不提示", async () => {
-    exportKeyBackend.mockRejectedValueOnce({
-      code: "ErrorExportFileExists",
-      detail: "alias.pub",
+    expect(result.current.conflict).toEqual({
+      category: "recipient",
+      fingerprint: "FP-R",
+      part: "public",
+      fileName: "alias.pub",
     });
-    askDialogMock.mockResolvedValueOnce(false);
-
-    await exportKey("recipient", "FP-R");
-
-    expect(exportKeyBackend).toHaveBeenCalledTimes(1);
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it("exportKey 覆盖重试失败时提示导出失败", async () => {
+  it("确认覆盖后带 overwrite 重试并提示成功、清除冲突", async () => {
+    exportKeyBackend
+      .mockRejectedValueOnce({ code: "ErrorExportFileExists", detail: "alias.pub" })
+      .mockResolvedValueOnce("C:/out/key.pub");
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("recipient", "FP-R", "public"));
+    await act(() => result.current.confirmOverwrite());
+
+    expect(exportKeyBackend).toHaveBeenLastCalledWith("recipient", "FP-R", "public", true);
+    expect(toast.success).toHaveBeenCalledWith("密钥已导出。");
+    expect(result.current.conflict).toBeNull();
+  });
+
+  it("确认覆盖重试失败时提示导出失败且保留冲突", async () => {
     exportKeyBackend
       .mockRejectedValueOnce({ code: "ErrorExportFileExists", detail: "alias.pub" })
       .mockRejectedValueOnce({ code: "ErrorExportFailed" });
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("private", "FP-P"));
+    await act(() => result.current.confirmOverwrite());
 
-    await exportKey("private", "FP-P");
-
-    expect(exportKeyBackend).toHaveBeenCalledTimes(2);
     expect(toast.error).toHaveBeenCalledWith("导出密钥失败。");
+    expect(result.current.conflict).not.toBeNull();
+  });
+
+  it("取消覆盖清除冲突", async () => {
+    exportKeyBackend.mockRejectedValueOnce({
+      code: "ErrorExportFileExists",
+      detail: "alias.pub",
+    });
+    const { result } = renderHook(() => useExportKey());
+    await act(() => result.current.exportKey("private", "FP-P"));
+    act(() => result.current.cancelOverwrite());
+
+    expect(result.current.conflict).toBeNull();
   });
 
   it("openExportFolder 优先打开配置的导出目录", async () => {

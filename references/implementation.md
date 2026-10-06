@@ -55,7 +55,7 @@
 ### 3.4 UI 交互
 
 - **密钥选择记忆**：按指纹写入 settings；恢复请求与手选存在竞态，用户手选后恢复不得覆盖；自动选中第一把也写入记忆。
-- **导出同名文件确认**：目标已有同名文件时 `export_key` 返回 `ErrorExportFileExists`（`AppError.detail` 携带文件名；`detail` 缺省不序列化，其余错误线格式不变），前端系统级 `ask()` 弹窗（覆盖/取消）确认后带 `overwrite = true` 重试，取消则静默返回。
+- **导出同名文件确认**：目标已有同名文件时 `export_key` 返回 `ErrorExportFileExists`（`AppError.detail` 携带文件名；`detail` 缺省不序列化，其余错误线格式不变）；前端经 `useExportKey` hook 记录冲突并渲染应用内 `ExportOverwriteDialog`（AlertDialog，与删除确认同款交互），确认后带 `overwrite = true` 重试，取消/Escape 清除冲突静默返回，重试失败保留冲突可再次确认。
 - **私钥生成后台化**：对话框即关、列表进度卡；生成状态提升为全局 GenerationProvider（切页不丢、防并发生成），仅禁用生成按钮。
 - **私钥菜单补齐公钥操作**：`export_key` 增加 `part` 参数，私钥条目可导出对应公钥；KeyCard 右键与「更多」下拉共用动作集。
 - **图标语义**：接收方 KeyRound、私钥 ShieldKeyhole、解密 LockOpen、生成 CirclePlus、导入 Import（全局闭锁=加密/开锁=解密）。
@@ -79,7 +79,7 @@
 - 命令层 `src-tauri/src/commands/`：mod（共享工具与 DTO）+ integrity / keys / crypto / store 按域拆分；lib.rs 用完整子模块路径引用（tauri 宏在定义模块内解析）。
 - 密钥库 `src-tauri/src/keystore/`：mod（schema/CRUD/settings）+ legacy（id 列重建、keys.json 迁移）。
 - 密钥测试独立文件 `src-tauri/src/keys_tests.rs`（`#[path]` 子模块）。
-- 前端对话框组件 `src/components/keys/`：Generate / ImportPrivateKey / ImportPublicKey / ChangePassword / Rename / Delete（后两个两页共用）+ EmptyList；对话框自含表单状态，条件渲染即重置。
+- 前端对话框组件 `src/components/keys/`：Generate / ImportPrivateKey / ImportPublicKey / ChangePassword / Rename / Delete（后两个两页共用）/ ExportOverwriteDialog（两页共用，配 `lib/keyFiles.ts` 的 `useExportKey` hook）+ EmptyList；对话框自含表单状态，条件渲染即重置。
 
 ## 5. 环境备忘（坑）
 
